@@ -17,7 +17,6 @@ import {
 import { Field as FormField, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -487,7 +486,7 @@ export default function App() {
                         <span>Tax</span>
                         <RateDropdown label="Tax" value={it.taxRate} options={TAX_OPTIONS} onChange={(value) => updateItem(it.id, 'taxRate', value)} />
                       </div>
-                      <TaxModeRadio value={it.taxMode || 'exclusive'} onChange={(value) => updateItem(it.id, 'taxMode', value)} />
+                      <TaxModeDropdown value={it.taxMode || 'exclusive'} onChange={(value) => updateItem(it.id, 'taxMode', value)} />
                       <div className="item-total">
                         <span>{formatMoney(line?.total ?? 0, currency)}</span>
                         <Button className="del-btn" size="icon" variant="ghost" onClick={() => removeItem(it.id)} disabled={items.length <= 1} aria-label="Remove item">
@@ -849,18 +848,27 @@ function RateDropdown({ label, onChange, options, value }) {
   )
 }
 
-function TaxModeRadio({ onChange, value }) {
+function TaxModeDropdown({ onChange, value }) {
+  const label = value === 'inclusive' ? 'Inclusive' : 'Exclusive'
+
   return (
-    <RadioGroup className="tax-mode-group" value={value} onValueChange={onChange} aria-label="Tax calculation mode">
-      <label className="tax-mode-option">
-        <RadioGroupItem value="exclusive" />
-        <span>Exclusive</span>
-      </label>
-      <label className="tax-mode-option">
-        <RadioGroupItem value="inclusive" />
-        <span>Inclusive</span>
-      </label>
-    </RadioGroup>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="tax-mode-trigger" aria-label="Tax calculation mode">
+        <span>{label}</span>
+        <ChevronDownIcon aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="tax-mode-menu" align="end">
+        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+          <DropdownMenuLabel className="rate-menu-label">Tax type</DropdownMenuLabel>
+          <DropdownMenuRadioItem className="rate-menu-item" value="exclusive">
+            <span>Exclusive</span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem className="rate-menu-item" value="inclusive">
+            <span>Inclusive</span>
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
