@@ -3,6 +3,29 @@
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { CalendarIcon, ChevronDownIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Field as FormField, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ReceiptPrinter } from '@/components/ReceiptPrinter'
 
 const CURRENCIES = [
@@ -17,6 +40,8 @@ const CURRENCIES = [
 ]
 
 const STORAGE_KEY = 'invoice-generator-v1'
+const DISCOUNT_OPTIONS = [0, 2.5, 5, 10, 15, 20]
+const TAX_OPTIONS = [0, 5, 8, 12, 18, 28]
 
 let uid = 0
 const newId = () => `item-${Date.now()}-${uid++}`
@@ -32,8 +57,8 @@ function plusDaysISO(days) {
 }
 
 const DEFAULT_STATE = {
-  business: { name: '', email: '', address: '', phone: '' },
-  client: { name: '', email: '', address: '' },
+  business: { name: '', email: '', address: '', phone: '', gstNo: '' },
+  client: { name: '', email: '', address: '', gstNo: '' },
   meta: {
     number: 'INV-0001',
     issueDate: todayISO(),
@@ -41,7 +66,7 @@ const DEFAULT_STATE = {
     currency: 'USD',
   },
   items: [
-    { id: 'item-1', description: '', qty: 1, price: 0 },
+    { id: 'item-1', description: '', qty: 1, price: 0, discount: 0, taxRate: 0, taxMode: 'exclusive' },
   ],
   taxRate: 0,
   discount: 0,
@@ -54,11 +79,13 @@ const SAMPLE_STATE = {
     email: 'hello@acmestudio.com',
     address: '123 Market St, Suite 4\nSan Francisco, CA 94103',
     phone: '+1 (555) 018-2245',
+    gstNo: '29ABCDE1234F1Z5',
   },
   client: {
     name: 'Nova Coffee Co.',
     email: 'billing@novacoffee.com',
     address: '456 Client Ave\nNew York, NY 10012',
+    gstNo: '27AAACN0000A1Z5',
   },
   meta: {
     number: 'INV-0042',
@@ -67,9 +94,9 @@ const SAMPLE_STATE = {
     currency: 'USD',
   },
   items: [
-    { id: newId(), description: 'Brand identity & logo design', qty: 1, price: 1800 },
-    { id: newId(), description: 'Website UI design (5 pages)', qty: 5, price: 320 },
-    { id: newId(), description: 'Design revision rounds', qty: 3, price: 120 },
+    { id: newId(), description: 'Brand identity & logo design', qty: 1, price: 1800, discount: 5, taxRate: 18, taxMode: 'exclusive' },
+    { id: newId(), description: 'Website UI design (5 pages)', qty: 5, price: 320, discount: 0, taxRate: 18, taxMode: 'inclusive' },
+    { id: newId(), description: 'Design revision rounds', qty: 3, price: 120, discount: 10, taxRate: 12, taxMode: 'exclusive' },
   ],
   taxRate: 8,
   discount: 5,
@@ -89,7 +116,15 @@ function loadState() {
       meta: { ...DEFAULT_STATE.meta, ...parsed.meta },
       items:
         Array.isArray(parsed.items) && parsed.items.length
-          ? parsed.items.map((i) => ({ id: i.id || newId(), description: i.description || '', qty: i.qty ?? 1, price: i.price ?? 0 }))
+          ? parsed.items.map((i) => ({
+              id: i.id || newId(),
+              description: i.description || '',
+              qty: i.qty ?? 1,
+              price: i.price ?? 0,
+              discount: i.discount ?? parsed.discount ?? 0,
+              taxRate: i.taxRate ?? parsed.taxRate ?? 0,
+              taxMode: i.taxMode || 'exclusive',
+            }))
           : DEFAULT_STATE.items,
     }
   } catch {
@@ -118,6 +153,21 @@ function formatDateLabel(iso) {
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(d)
 }
 
+function isoToDate(iso) {
+  if (!iso) return undefined
+  const date = new Date(iso + 'T00:00:00')
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+function dateToISO(date) {
+  if (!date) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 export default function App() {
   const pathname = usePathname()
   const router = useRouter()
@@ -128,7 +178,7 @@ export default function App() {
   const [invoiceGenerated, setInvoiceGenerated] = useState(() => pathname === '/invoice')
   const generationTimers = useRef([])
 
-  const { business, client, meta, items, taxRate, discount, notes } = state
+  const { business, client, meta, items, notes } = state
   const isInvoiceRoute = pathname === '/invoice'
 
   useEffect(() => {
@@ -183,7 +233,7 @@ export default function App() {
 
   const addItem = useCallback(() => {
     markInvoiceDirty()
-    setState((s) => ({ ...s, items: [...s.items, { id: newId(), description: '', qty: 1, price: 0 }] }))
+    setState((s) => ({ ...s, items: [...s.items, { id: newId(), description: '', qty: 1, price: 0, discount: 0, taxRate: 0, taxMode: 'exclusive' }] }))
   }, [markInvoiceDirty])
 
   const removeItem = useCallback((id) => {
@@ -193,7 +243,7 @@ export default function App() {
 
   const resetAll = useCallback(() => {
     markInvoiceDirty()
-    const fresh = { ...DEFAULT_STATE, items: [{ id: newId(), description: '', qty: 1, price: 0 }], meta: { ...DEFAULT_STATE.meta, issueDate: todayISO(), dueDate: plusDaysISO(14) } }
+    const fresh = { ...DEFAULT_STATE, items: [{ id: newId(), description: '', qty: 1, price: 0, discount: 0, taxRate: 0, taxMode: 'exclusive' }], meta: { ...DEFAULT_STATE.meta, issueDate: todayISO(), dueDate: plusDaysISO(14) } }
     setState(fresh)
   }, [markInvoiceDirty])
 
@@ -211,13 +261,30 @@ export default function App() {
   const currencyMeta = CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0]
 
   const calc = useMemo(() => {
-    const subtotal = items.reduce((sum, it) => sum + (Number(it.qty) || 0) * (Number(it.price) || 0), 0)
-    const discountAmount = subtotal * ((Number(discount) || 0) / 100)
-    const taxable = subtotal - discountAmount
-    const taxAmount = taxable * ((Number(taxRate) || 0) / 100)
-    const total = taxable + taxAmount
-    return { subtotal, discountAmount, taxable, taxAmount, total }
-  }, [items, discount, taxRate])
+    const lines = items.map((it) => {
+      const qty = Number(it.qty) || 0
+      const price = Number(it.price) || 0
+      const discountRate = Number(it.discount) || 0
+      const taxRate = Number(it.taxRate) || 0
+      const taxMultiplier = 1 + taxRate / 100
+      const amount = qty * price
+      const discountAmount = amount * (discountRate / 100)
+      const discounted = Math.max(0, amount - discountAmount)
+      const isInclusive = it.taxMode === 'inclusive' && taxRate > 0
+      const taxable = isInclusive ? discounted / taxMultiplier : discounted
+      const taxAmount = isInclusive ? discounted - taxable : taxable * (taxRate / 100)
+      const total = isInclusive ? discounted : taxable + taxAmount
+
+      return { id: it.id, amount, discountAmount, taxable, taxAmount, total }
+    })
+    const subtotal = lines.reduce((sum, line) => sum + line.amount, 0)
+    const discountAmount = lines.reduce((sum, line) => sum + line.discountAmount, 0)
+    const taxable = lines.reduce((sum, line) => sum + line.taxable, 0)
+    const taxAmount = lines.reduce((sum, line) => sum + line.taxAmount, 0)
+    const total = lines.reduce((sum, line) => sum + line.total, 0)
+
+    return { subtotal, discountAmount, taxable, taxAmount, total, lines }
+  }, [items])
 
   const handleGenerateInvoice = useCallback(() => {
     clearGenerationTimers()
@@ -291,11 +358,11 @@ export default function App() {
           </div>
           <div className="header-right">
             {isInvoiceRoute ? (
-              <button className="btn-ghost" onClick={handleEditInvoice} aria-label="Edit invoice">Edit</button>
+              <Button className="btn-ghost" onClick={handleEditInvoice} aria-label="Edit invoice">Edit</Button>
             ) : (
               <>
-                <button className="btn-ghost" onClick={loadSample} aria-label="Load sample data">Sample</button>
-                <button className="btn-ghost" onClick={resetAll} aria-label="Reset invoice">Reset</button>
+                <Button className="btn-ghost" onClick={loadSample} aria-label="Load sample data">Sample</Button>
+                <Button className="btn-ghost" onClick={resetAll} aria-label="Reset invoice">Reset</Button>
               </>
             )}
           </div>
@@ -311,16 +378,19 @@ export default function App() {
             <Panel title="Your Business">
               <div className="field-grid">
                 <Field label="Business name" full>
-                  <input className="in" value={business.name} onChange={(e) => setField('business', 'name', e.target.value)} placeholder="Acme Studio" aria-label="Business name" />
+                  <Input className="in" value={business.name} onChange={(e) => setField('business', 'name', e.target.value)} placeholder="Acme Studio" aria-label="Business name" />
                 </Field>
                 <Field label="Email">
-                  <input className="in" value={business.email} onChange={(e) => setField('business', 'email', e.target.value)} placeholder="hello@acme.com" aria-label="Business email" />
+                  <Input className="in" value={business.email} onChange={(e) => setField('business', 'email', e.target.value)} placeholder="hello@acme.com" aria-label="Business email" />
                 </Field>
                 <Field label="Phone">
-                  <input className="in" value={business.phone} onChange={(e) => setField('business', 'phone', e.target.value)} placeholder="+1 555 000 0000" aria-label="Business phone" />
+                  <Input className="in" value={business.phone} onChange={(e) => setField('business', 'phone', e.target.value)} placeholder="+1 555 000 0000" aria-label="Business phone" />
+                </Field>
+                <Field label="GST No.">
+                  <Input className="in" value={business.gstNo} onChange={(e) => setField('business', 'gstNo', e.target.value)} placeholder="29ABCDE1234F1Z5" aria-label="Business GST number" />
                 </Field>
                 <Field label="Address" full>
-                  <textarea className="in ta" rows={2} value={business.address} onChange={(e) => setField('business', 'address', e.target.value)} placeholder="123 Market St, Suite 4&#10;San Francisco, CA" aria-label="Business address" />
+                  <Textarea className="in ta" rows={2} value={business.address} onChange={(e) => setField('business', 'address', e.target.value)} placeholder="123 Market St, Suite 4&#10;San Francisco, CA" aria-label="Business address" />
                 </Field>
               </div>
             </Panel>
@@ -328,13 +398,16 @@ export default function App() {
             <Panel title="Bill To">
               <div className="field-grid">
                 <Field label="Client name" full>
-                  <input className="in" value={client.name} onChange={(e) => setField('client', 'name', e.target.value)} placeholder="Jane Client" aria-label="Client name" />
+                  <Input className="in" value={client.name} onChange={(e) => setField('client', 'name', e.target.value)} placeholder="Jane Client" aria-label="Client name" />
                 </Field>
                 <Field label="Email" full>
-                  <input className="in" value={client.email} onChange={(e) => setField('client', 'email', e.target.value)} placeholder="jane@company.com" aria-label="Client email" />
+                  <Input className="in" value={client.email} onChange={(e) => setField('client', 'email', e.target.value)} placeholder="jane@company.com" aria-label="Client email" />
+                </Field>
+                <Field label="GST No." full>
+                  <Input className="in" value={client.gstNo} onChange={(e) => setField('client', 'gstNo', e.target.value)} placeholder="27AAACN0000A1Z5" aria-label="Client GST number" />
                 </Field>
                 <Field label="Address" full>
-                  <textarea className="in ta" rows={2} value={client.address} onChange={(e) => setField('client', 'address', e.target.value)} placeholder="456 Client Ave&#10;New York, NY" aria-label="Client address" />
+                  <Textarea className="in ta" rows={2} value={client.address} onChange={(e) => setField('client', 'address', e.target.value)} placeholder="456 Client Ave&#10;New York, NY" aria-label="Client address" />
                 </Field>
               </div>
             </Panel>
@@ -342,20 +415,41 @@ export default function App() {
             <Panel title="Invoice Details">
               <div className="field-grid">
                 <Field label="Invoice #">
-                  <input className="in" value={meta.number} onChange={(e) => setField('meta', 'number', e.target.value)} placeholder="INV-0001" aria-label="Invoice number" />
+                  <Input className="in" value={meta.number} onChange={(e) => setField('meta', 'number', e.target.value)} placeholder="INV-0001" aria-label="Invoice number" />
                 </Field>
                 <Field label="Currency">
-                  <div className="select-wrap">
-                    <select className="in select" value={meta.currency} onChange={(e) => setField('meta', 'currency', e.target.value)} aria-label="Currency">
-                      {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
-                    </select>
-                  </div>
+                  <Select value={meta.currency} onValueChange={(value) => setField('meta', 'currency', value)}>
+                    <SelectTrigger className="select-trigger" aria-label="Currency">
+                      <SelectValue>
+                        {(value) => {
+                          const selected = CURRENCIES.find((c) => c.code === value) || currencyMeta
+
+                          return (
+                            <span className="currency-value">
+                              <span>{selected.code}</span>
+                              <span>{selected.symbol}</span>
+                            </span>
+                          )
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className="select-menu" align="start">
+                      {CURRENCIES.map((c) => (
+                        <SelectItem className="select-menu-item" key={c.code} value={c.code}>
+                          <span className="currency-option">
+                            <span>{c.code}</span>
+                            <span>{c.label.replace(`${c.code} — `, '')}</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
                 <Field label="Issue date">
-                  <input type="date" className="in date" value={meta.issueDate} onChange={(e) => setField('meta', 'issueDate', e.target.value)} aria-label="Issue date" />
+                  <DatePicker value={meta.issueDate} onChange={(value) => setField('meta', 'issueDate', value)} ariaLabel="Issue date" />
                 </Field>
                 <Field label="Due date">
-                  <input type="date" className="in date" value={meta.dueDate} onChange={(e) => setField('meta', 'dueDate', e.target.value)} aria-label="Due date" />
+                  <DatePicker value={meta.dueDate} onChange={(value) => setField('meta', 'dueDate', value)} ariaLabel="Due date" />
                 </Field>
               </div>
             </Panel>
@@ -366,47 +460,67 @@ export default function App() {
                   <span className="ih-desc">Description</span>
                   <span className="ih-qty">Qty</span>
                   <span className="ih-price">Price</span>
+                  <span className="ih-discount">Disc %</span>
+                  <span className="ih-tax">Tax %</span>
+                  <span className="ih-mode">Tax type</span>
                   <span className="ih-amt">Amount</span>
                   <span className="ih-del" />
                 </div>
                 {items.map((it) => {
-                  const amount = (Number(it.qty) || 0) * (Number(it.price) || 0)
+                  const line = calc.lines.find((entry) => entry.id === it.id)
                   return (
                     <div className="item-row" key={it.id}>
-                      <input className="in item-desc" value={it.description} onChange={(e) => updateItem(it.id, 'description', e.target.value)} placeholder="Design services" aria-label="Item description" />
-                      <input className="in item-num" type="number" min="0" step="1" value={it.qty} onChange={(e) => updateItem(it.id, 'qty', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Quantity" />
-                      <input className="in item-num" type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(it.id, 'price', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Unit price" />
-                      <span className="item-amt">{formatMoney(amount, currency)}</span>
-                      <button className="del-btn" onClick={() => removeItem(it.id)} disabled={items.length <= 1} aria-label="Remove item">
-                        <IconTrash />
-                      </button>
+                      <Input className="in item-desc" value={it.description} onChange={(e) => updateItem(it.id, 'description', e.target.value)} placeholder="Design services" aria-label="Item description" />
+                      <div className="item-control item-qty">
+                        <span>Qty</span>
+                        <Input className="in item-num" type="number" min="0" step="1" value={it.qty} onChange={(e) => updateItem(it.id, 'qty', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Quantity" />
+                      </div>
+                      <div className="item-control item-price">
+                        <span>Price</span>
+                        <Input className="in item-num" type="number" min="0" step="0.01" value={it.price} onChange={(e) => updateItem(it.id, 'price', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Unit price" />
+                      </div>
+                      <div className="item-control item-discount">
+                        <span>Disc</span>
+                        <RateDropdown label="Discount" value={it.discount} options={DISCOUNT_OPTIONS} onChange={(value) => updateItem(it.id, 'discount', value)} />
+                      </div>
+                      <div className="item-control item-tax">
+                        <span>Tax</span>
+                        <RateDropdown label="Tax" value={it.taxRate} options={TAX_OPTIONS} onChange={(value) => updateItem(it.id, 'taxRate', value)} />
+                      </div>
+                      <TaxModeRadio value={it.taxMode || 'exclusive'} onChange={(value) => updateItem(it.id, 'taxMode', value)} />
+                      <div className="item-total">
+                        <span>{formatMoney(line?.total ?? 0, currency)}</span>
+                        <Button className="del-btn" size="icon" variant="ghost" onClick={() => removeItem(it.id)} disabled={items.length <= 1} aria-label="Remove item">
+                          <IconTrash />
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
               </div>
-              <button className="btn-add" onClick={addItem} aria-label="Add line item">
+              <Button className="btn-add" variant="outline" onClick={addItem} aria-label="Add line item">
                 <IconPlus /> Add item
-              </button>
+              </Button>
             </Panel>
 
             <Panel title="Totals & Notes">
+              <div className="totals-card" aria-label="Invoice totals">
+                <div><span>Subtotal</span><strong>{formatMoney(calc.subtotal, currency)}</strong></div>
+                <div><span>Line discounts</span><strong>-{formatMoney(calc.discountAmount, currency)}</strong></div>
+                <div><span>Tax</span><strong>{formatMoney(calc.taxAmount, currency)}</strong></div>
+                <div className="totals-grand"><span>Total</span><strong>{formatMoney(calc.total, currency)}</strong></div>
+              </div>
               <div className="field-grid">
-                <Field label="Discount (%)">
-                  <input className="in" type="number" min="0" max="100" step="0.1" value={discount} onChange={(e) => setTop('discount', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Discount percent" />
-                </Field>
-                <Field label="Tax (%)">
-                  <input className="in" type="number" min="0" max="100" step="0.1" value={taxRate} onChange={(e) => setTop('taxRate', e.target.value === '' ? '' : Number(e.target.value))} aria-label="Tax percent" />
-                </Field>
                 <Field label="Notes" full>
-                  <textarea className="in ta" rows={2} value={notes} onChange={(e) => setTop('notes', e.target.value)} placeholder="Payment terms, thank-you note…" aria-label="Notes" />
+                  <Textarea className="in ta" rows={2} value={notes} onChange={(e) => setTop('notes', e.target.value)} placeholder="Payment terms, thank-you note…" aria-label="Notes" />
                 </Field>
               </div>
             </Panel>
 
             <div className="generate-actions">
-              <button className="btn-primary btn-generate" onClick={handleGenerateInvoice} disabled={isGenerating} aria-label="Generate invoice">
+              <Button className="btn-primary btn-generate" onClick={handleGenerateInvoice} disabled={isGenerating} aria-label="Generate invoice">
                 <IconReceipt /> {isGenerating ? 'Generating...' : 'Generate Invoice'}
-              </button>
+              </Button>
             </div>
           </section>
           )}
@@ -421,9 +535,9 @@ export default function App() {
                     <div className="receipt-logo" aria-hidden="true">
                       <Image src="/images/receipt-printer-logo.svg" alt="" width={34} height={34} />
                     </div>
-                    <button className="receipt-home" type="button" onClick={() => router.push('/')}>
+                    <Button className="receipt-home" type="button" variant="ghost" onClick={() => router.push('/')}>
                       <IconHome /> Home
-                    </button>
+                    </Button>
                   </ReceiptPrinter.Header>
 
                   <ReceiptPrinter.Screen>
@@ -460,7 +574,7 @@ export default function App() {
                       {items.map((it) => (
                         <div className="receipt-line" key={it.id}>
                           <span>{it.description || 'Item description'}</span>
-                          <strong>{formatMoney((Number(it.qty) || 0) * (Number(it.price) || 0), currency)}</strong>
+                          <strong>{formatMoney(calc.lines.find((line) => line.id === it.id)?.total ?? 0, currency)}</strong>
                         </div>
                       ))}
                     </div>
@@ -469,13 +583,13 @@ export default function App() {
                       <span>Subtotal</span>
                       <strong>{formatMoney(calc.subtotal, currency)}</strong>
                     </div>
-                    {(Number(discount) || 0) > 0 && (
+                    {calc.discountAmount > 0 && (
                       <div className="receipt-line">
                         <span>Discount</span>
                         <strong>-{formatMoney(calc.discountAmount, currency)}</strong>
                       </div>
                     )}
-                    {(Number(taxRate) || 0) > 0 && (
+                    {calc.taxAmount > 0 && (
                       <div className="receipt-line">
                         <span>Tax</span>
                         <strong>{formatMoney(calc.taxAmount, currency)}</strong>
@@ -488,7 +602,6 @@ export default function App() {
                     <div className="receipt-paper-rule" />
                     <div className="receipt-transaction">
                       <div><span>Order</span><strong>{meta.number || 'INV-0001'}</strong></div>
-                      <div><span>Paid with</span><strong>Visa **** 4242</strong></div>
                       <div><span>Date</span><strong>{formatDateLabel(meta.issueDate)}</strong></div>
                     </div>
                     <div className="receipt-barcode" aria-hidden="true">
@@ -510,9 +623,9 @@ export default function App() {
                   <div className="receipt-logo" aria-hidden="true">
                     <Image src="/images/receipt-printer-logo.svg" alt="" width={34} height={34} />
                   </div>
-                  <button className="receipt-home" type="button" onClick={handleEditInvoice}>
+                  <Button className="receipt-home" type="button" variant="ghost" onClick={handleEditInvoice}>
                     <IconHome /> Home
-                  </button>
+                  </Button>
                 </ReceiptPrinter.Header>
 
                 <ReceiptPrinter.Screen>
@@ -549,7 +662,7 @@ export default function App() {
                     {items.map((it) => (
                       <div className="receipt-line" key={it.id}>
                         <span>{it.description || 'Item description'}</span>
-                        <strong>{formatMoney((Number(it.qty) || 0) * (Number(it.price) || 0), currency)}</strong>
+                        <strong>{formatMoney(calc.lines.find((line) => line.id === it.id)?.total ?? 0, currency)}</strong>
                       </div>
                     ))}
                   </div>
@@ -561,7 +674,6 @@ export default function App() {
                   <div className="receipt-paper-rule" />
                   <div className="receipt-transaction">
                     <div><span>Order</span><strong>{meta.number || 'INV-0001'}</strong></div>
-                    <div><span>Paid with</span><strong>Visa **** 4242</strong></div>
                     <div><span>Date</span><strong>{formatDateLabel(meta.issueDate)}</strong></div>
                   </div>
                   <div className="receipt-barcode" aria-hidden="true">
@@ -574,24 +686,22 @@ export default function App() {
 
             <div className="invoice-result">
               <div className="invoice-result-actions no-print">
-                <button className="btn-ghost btn-replay" onClick={handleReplayReceipt} disabled={isPrinterRunning} aria-label="Replay receipt generation">
+                <Button className="btn-ghost btn-replay" variant="ghost" onClick={handleReplayReceipt} disabled={isPrinterRunning} aria-label="Replay receipt generation">
                   <IconReplay /> {isPrinterRunning ? 'Replaying' : 'Replay'}
-                </button>
-                <button className="btn-primary btn-download" onClick={handlePrint} aria-label="Download invoice as PDF">
+                </Button>
+                <Button className="btn-primary btn-download" onClick={handlePrint} aria-label="Download invoice as PDF">
                   <IconDownload /> Download PDF
-                </button>
+                </Button>
               </div>
 
               <TaxInvoiceDocument
                 business={business}
                 calc={calc}
                 client={client}
-                discount={discount}
                 formatMoney={(value) => formatMoney(value, currency)}
                 items={items}
                 meta={meta}
                 notes={notes}
-                taxRate={taxRate}
               />
 
               <div className="invoice-paper legacy-invoice-paper">
@@ -601,6 +711,7 @@ export default function App() {
                   <div className="inv-brand-meta">
                     {business.email && <div>{business.email}</div>}
                     {business.phone && <div>{business.phone}</div>}
+                    {business.gstNo && <div>GST No. {business.gstNo}</div>}
                     {business.address && <div className="inv-multiline">{business.address}</div>}
                   </div>
                 </div>
@@ -616,6 +727,7 @@ export default function App() {
                   <div className="inv-party-name">{client.name || 'Client name'}</div>
                   <div className="inv-party-meta">
                     {client.email && <div>{client.email}</div>}
+                    {client.gstNo && <div>GST No. {client.gstNo}</div>}
                     {client.address && <div className="inv-multiline">{client.address}</div>}
                   </div>
                 </div>
@@ -632,29 +744,37 @@ export default function App() {
                     <th className="t-desc">Description</th>
                     <th className="t-qty">Qty</th>
                     <th className="t-price">Price</th>
+                    <th className="t-price">Disc</th>
+                    <th className="t-price">Tax</th>
                     <th className="t-amt">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((it) => (
-                    <tr key={it.id}>
-                      <td className="t-desc">{it.description || <span className="t-empty">Item description</span>}</td>
-                      <td className="t-qty">{Number(it.qty) || 0}</td>
-                      <td className="t-price">{formatMoney(Number(it.price) || 0, currency)}</td>
-                      <td className="t-amt">{formatMoney((Number(it.qty) || 0) * (Number(it.price) || 0), currency)}</td>
-                    </tr>
-                  ))}
+                  {items.map((it) => {
+                    const line = calc.lines.find((entry) => entry.id === it.id)
+
+                    return (
+                      <tr key={it.id}>
+                        <td className="t-desc">{it.description || <span className="t-empty">Item description</span>}</td>
+                        <td className="t-qty">{Number(it.qty) || 0}</td>
+                        <td className="t-price">{formatMoney(Number(it.price) || 0, currency)}</td>
+                        <td className="t-price">{Number(it.discount) || 0}%</td>
+                        <td className="t-price">{Number(it.taxRate) || 0}%</td>
+                        <td className="t-amt">{formatMoney(line?.total ?? 0, currency)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
 
               <div className="inv-summary">
                 <div className="inv-sum-inner">
                   <div className="sum-row"><span>Subtotal</span><span>{formatMoney(calc.subtotal, currency)}</span></div>
-                  {(Number(discount) || 0) > 0 && (
-                    <div className="sum-row"><span>Discount ({discount}%)</span><span>−{formatMoney(calc.discountAmount, currency)}</span></div>
+                  {calc.discountAmount > 0 && (
+                    <div className="sum-row"><span>Line discounts</span><span>−{formatMoney(calc.discountAmount, currency)}</span></div>
                   )}
-                  {(Number(taxRate) || 0) > 0 && (
-                    <div className="sum-row"><span>Tax ({taxRate}%)</span><span>{formatMoney(calc.taxAmount, currency)}</span></div>
+                  {calc.taxAmount > 0 && (
+                    <div className="sum-row"><span>Tax</span><span>{formatMoney(calc.taxAmount, currency)}</span></div>
                   )}
                   <div className="sum-row grand"><span>Total</span><span>{formatMoney(calc.total, currency)}</span></div>
                 </div>
@@ -681,92 +801,187 @@ export default function App() {
 }
 
 /* ─── Small building blocks ────────────────────── */
-function TaxInvoiceDocument({ business, calc, client, discount, formatMoney, items, meta, notes, taxRate }) {
-  const businessAddress = business.address || '5 Any Street, Any City, That Area Code'
-  const clientAddress = client.address || 'This Address\nThis City\nThis Area Code'
-  const taxNumber = String(meta.number || '0003521').replace(/\D/g, '').slice(-6).padStart(6, '0')
+function DatePicker({ ariaLabel, onChange, value }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className="date-trigger" aria-label={ariaLabel}>
+        <CalendarIcon aria-hidden="true" />
+        <span>{formatDateLabel(value)}</span>
+        <ChevronDownIcon aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent className="date-popover" align="start">
+        <Calendar
+          mode="single"
+          selected={isoToDate(value)}
+          onSelect={(date) => {
+            if (!date) return
+            onChange(dateToISO(date))
+            setOpen(false)
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function RateDropdown({ label, onChange, options, value }) {
+  const current = Number(value) || 0
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="rate-trigger" aria-label={`${label} percent`}>
+        <span className="rate-value">{current}%</span>
+        <ChevronDownIcon aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="rate-menu" align="end">
+        <DropdownMenuRadioGroup value={String(current)} onValueChange={(next) => onChange(Number(next))}>
+          <DropdownMenuLabel className="rate-menu-label">{label}</DropdownMenuLabel>
+          {options.map((option) => (
+            <DropdownMenuRadioItem className="rate-menu-item" key={option} value={String(option)}>
+              <span>{option}%</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function TaxModeRadio({ onChange, value }) {
+  return (
+    <RadioGroup className="tax-mode-group" value={value} onValueChange={onChange} aria-label="Tax calculation mode">
+      <label className="tax-mode-option">
+        <RadioGroupItem value="exclusive" />
+        <span>Exclusive</span>
+      </label>
+      <label className="tax-mode-option">
+        <RadioGroupItem value="inclusive" />
+        <span>Inclusive</span>
+      </label>
+    </RadioGroup>
+  )
+}
+
+function TaxInvoiceDocument({ business, calc, client, formatMoney, items, meta }) {
+  const visibleItems = items.filter((it) => it.description || Number(it.qty) || Number(it.price)).slice(0, 16)
+  const printableRows = Array.from({ length: Math.max(0, 16 - visibleItems.length) })
+  const roundedTotal = Math.round(calc.total)
+  const roundOff = roundedTotal - calc.total
+  const businessAddressLines = String(business.address || '').split('\n').filter(Boolean)
+  const clientAddressLines = String(client.address || '').split('\n').filter(Boolean)
+  const businessName = business.name || 'YOUR COMPANY NAME'
+  const businessAddress = businessAddressLines[0] || 'Your Address Line 1, Your Address Line 2'
+  const businessCity = businessAddressLines.slice(1).join(', ') || 'City, State - Pincode'
+  const clientAddress = clientAddressLines[0] || ''
+  const clientCity = clientAddressLines.slice(1).join(', ') || ''
 
   return (
     <article className="tax-invoice-template" id="invoice">
       <header className="tax-head">
-        <h2>{business.name || 'TOM GREEN HANDYMAN'}</h2>
-        <div className="tax-business-address inv-multiline">{businessAddress}</div>
-        <strong>Telephone: {business.phone || '0800 XXX XXX'}</strong>
+        <h2>{businessName}</h2>
+        <div className="tax-business-address">{businessAddress}</div>
+        <div className="tax-business-address">{businessCity}</div>
+        <div className="tax-contact-line">
+          <span>Phone : {business.phone || '9876543210'}</span>
+          <i />
+          <span>E-Mail : {business.email || 'info@yourcompany.com'}</span>
+        </div>
       </header>
 
-      <section className="tax-meta-grid">
-        <div><strong>Date :</strong><span>{meta.issueDate || todayISO()}</span></div>
-        <div><strong>Invoice No :</strong><span>{taxNumber}</span></div>
-        <div className="tax-registered"><strong>Tax Registered No</strong><span>{taxNumber}</span></div>
-      </section>
-
-      <section className="tax-client">
-        <strong>{client.name || 'Mr and Mrs Fielding'}</strong>
-        <div className="inv-multiline">{clientAddress}</div>
-      </section>
-
       <h3 className="tax-title">TAX INVOICE</h3>
+
+      <section className="tax-party-grid">
+        <div className="tax-bill-to">
+          <h4>Bill To:</h4>
+          <div className="tax-field-list">
+            <div><span>Name</span><i>:</i><strong>{client.name}</strong></div>
+            <div><span>Address</span><i>:</i><strong>{clientAddress}</strong></div>
+            <div><span>City, State</span><i>:</i><strong>{clientCity}</strong></div>
+            <div><span>PIN/ZIP</span><i>:</i><strong /></div>
+            <div><span>GSTIN</span><i>:</i><strong>{client.gstNo}</strong></div>
+          </div>
+        </div>
+        <div className="tax-details">
+          <div className="tax-field-list">
+            <div><span>Invoice No.</span><i>:</i><strong>{meta.number}</strong></div>
+            <div><span>Date</span><i>:</i><strong>{formatDateLabel(meta.issueDate)}</strong></div>
+            <div><span>L.R. No.</span><i>:</i><strong /></div>
+            <div><span>Cases</span><i>:</i><strong /></div>
+            <div><span>Transport</span><i>:</i><strong /></div>
+            <div><span>Due Date</span><i>:</i><strong>{formatDateLabel(meta.dueDate)}</strong></div>
+          </div>
+        </div>
+      </section>
 
       <table className="tax-items">
         <thead>
           <tr>
-            <th>Quantity</th>
-            <th>Description</th>
-            <th>Unit Price</th>
-            <th>Cost</th>
+            <th>S.No</th>
+            <th>Qty.</th>
+            <th>Product</th>
+            <th>Rate</th>
+            <th>DIS</th>
+            <th>GST</th>
+            <th>Amount</th>
           </tr>
         </thead>
         <tbody>
-          {business.name && (
-            <tr className="tax-job-row">
-              <td />
-              <td>{business.name}</td>
-              <td />
-              <td />
-            </tr>
-          )}
-          {items.map((it) => {
+          {visibleItems.map((it, index) => {
             const qty = Number(it.qty) || 0
             const price = Number(it.price) || 0
+            const line = calc.lines.find((entry) => entry.id === it.id)
 
             return (
               <tr key={it.id}>
+                <td>{index + 1}</td>
                 <td>{qty}</td>
                 <td>{it.description || 'Item description'}</td>
                 <td>{formatMoney(price)}</td>
-                <td>{formatMoney(qty * price)}</td>
+                <td>{Number(it.discount) || 0}%</td>
+                <td>{Number(it.taxRate) || 0}%</td>
+                <td>{formatMoney(line?.total ?? 0)}</td>
               </tr>
             )
           })}
+          {printableRows.map((_, index) => (
+            <tr className="tax-empty-row" key={`empty-${index}`}>
+              <td>{visibleItems.length + index + 1}</td>
+              <td />
+              <td />
+              <td />
+              <td />
+              <td />
+              <td />
+            </tr>
+          ))}
         </tbody>
       </table>
 
-      <section className="tax-totals">
-        <div><span>Subtotal</span><strong>{formatMoney(calc.subtotal)}</strong></div>
-        {(Number(discount) || 0) > 0 && <div><span>Discount</span><strong>-{formatMoney(calc.discountAmount)}</strong></div>}
-        <div><span>Tax{Number(taxRate) ? ` (${taxRate}%)` : ''}</span><strong>{formatMoney(calc.taxAmount)}</strong></div>
-        <div className="tax-total-due"><span>Total Due</span><strong>{formatMoney(calc.total)}</strong></div>
+      <section className="tax-summary">
+        <div className="tax-summary-space" />
+        <div className="tax-summary-table">
+          <div><span>Sub Total</span><strong>{formatMoney(calc.subtotal)}</strong></div>
+          <div><span>GST</span><strong>{formatMoney(calc.taxAmount)}</strong></div>
+          <div><span>Round Off</span><strong>{formatMoney(roundOff)}</strong></div>
+          <div className="tax-grand-total"><span>GRAND TOTAL</span><strong>{formatMoney(roundedTotal)}</strong></div>
+        </div>
       </section>
 
       <section className="tax-terms">
-        <p>Payment due by the 10th of the month following the date of invoice.</p>
-        <p>Please make payment into Bank Account No. <strong>12 3456 789112 012</strong></p>
-        <p>{notes || 'Interest of 10% per year will be charged on late payments.'}</p>
-      </section>
-
-      <section className="tax-remittance">
-        <div className="tax-cut">Cut here</div>
-        <h4>Remittance</h4>
-        <div className="tax-remittance-grid">
-          <div>
-            <strong>{business.name || 'TOM GREEN HANDYMAN'}</strong>
-            <div className="inv-multiline">{businessAddress}</div>
-          </div>
-          <div>
-            <strong>{client.name || 'Mr and Mrs Fielding'}</strong>
-            <div className="tax-remittance-row"><span>Amount Due</span><strong>{formatMoney(calc.total)}</strong></div>
-            <div className="tax-remittance-row"><span>Amount Paid</span><i /></div>
-          </div>
+        <div className="tax-terms-copy">
+          <h4>Terms & Conditions</h4>
+          <ul>
+            <li>Goods once sold will not be taken back or exchanged.</li>
+            <li>Bills not paid due date will attract 24% interest.</li>
+            <li>All disputes subject to Jurisdiction only.</li>
+            <li>Prescribed Sales Tax declaration will be given.</li>
+          </ul>
+        </div>
+        <div className="tax-signature">
+          <strong>For {businessName}</strong>
+          <span>Authorised signatory</span>
         </div>
       </section>
     </article>
@@ -784,10 +999,10 @@ function Panel({ title, children }) {
 
 function Field({ label, children, full }) {
   return (
-    <label className={`field${full ? ' full' : ''}`}>
-      <span className="field-label">{label}</span>
+    <FormField className={`field${full ? ' full' : ''}`}>
+      <FieldLabel className="field-label">{label}</FieldLabel>
       {children}
-    </label>
+    </FormField>
   )
 }
 
