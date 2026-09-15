@@ -1509,7 +1509,7 @@ body {
 }
 
 .receipt-output {
-  width: min(80%, 308px);
+  width: min(90%, 308px);
   position: relative;
   z-index: 20;
   overflow: hidden;
@@ -1678,12 +1678,16 @@ body {
 
 .receipt-total span {
   color: #1a1a1f;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .receipt-total strong {
+  flex-shrink: 0;
   color: #151515;
   font-family: var(--font-sans);
   font-size: 1.1rem;
+  white-space: nowrap;
 }
 
 .receipt-thanks {
@@ -1824,10 +1828,9 @@ body {
   }
 
   .item-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(
-        150px,
-        0.9fr
-      ) minmax(120px, 0.75fr) 28px;
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr)) minmax(150px, 0.9fr)
+      minmax(120px, 0.75fr) 28px;
     gap: 8px;
     align-items: end;
     padding: 11px;
