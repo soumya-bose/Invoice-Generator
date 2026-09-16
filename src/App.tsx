@@ -1,8 +1,10 @@
 ﻿"use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
+  type ChangeEvent,
   type ReactNode,
   useState,
   useMemo,
@@ -10,7 +12,7 @@ import {
   useEffect,
   useRef,
 } from "react"
-import { CalendarIcon, ChevronDownIcon } from "lucide-react"
+import { CalendarIcon, ChevronDownIcon, UploadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -68,6 +70,9 @@ type InvoiceItem = {
   discount: number
   taxRate: number
   taxMode: TaxMode
+  productId?: string
+  productSku?: string
+  productStockQty?: number
 }
 
 type InvoiceState = {
@@ -96,6 +101,30 @@ type InvoiceCalc = {
   taxAmount: number
   total: number
   lines: CalcLine[]
+}
+
+type ProductSuggestion = {
+  _id: string
+  name: string
+  description: string
+  sku: string
+  price: number
+  taxRate: number
+  stockQty: number
+  category: string
+}
+
+type ProductSearchState = {
+  activeItemId: string | null
+  loading: boolean
+  products: ProductSuggestion[]
+  query: string
+}
+
+type ImportSummary = {
+  inserted: number
+  updated: number
+  failed: number
 }
 
 const CURRENCIES: Array<{
@@ -319,6 +348,12 @@ function loadState(): InvoiceState {
               discount: asNumber(i.discount, asNumber(parsed.discount)),
               taxRate: asNumber(i.taxRate, asNumber(parsed.taxRate)),
               taxMode: isTaxMode(i.taxMode) ? i.taxMode : "exclusive",
+              productId: asString(i.productId) || undefined,
+              productSku: asString(i.productSku) || undefined,
+              productStockQty:
+                typeof i.productStockQty === "number"
+                  ? i.productStockQty
+                  : undefined,
             }))
           : DEFAULT_STATE.items,
       taxRate: asNumber(parsed.taxRate, DEFAULT_STATE.taxRate),
@@ -466,6 +501,18 @@ export default function App() {
   const [invoiceGenerated, setInvoiceGenerated] = useState(
     () => pathname === "/invoice"
   )
+  const [productSearch, setProductSearch] = useState<ProductSearchState>({
+    activeItemId: null,
+    loading: false,
+    products: [],
+    query: "",
+  })
+  const [invoiceError, setInvoiceError] = useState("")
+  const [isSavingInvoice, setIsSavingInvoice] = useState(false)
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
+  const [importError, setImportError] = useState("")
+  const [isImporting, setIsImporting] = useState(false)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const generationTimers = useRef<number[]>([])
   const hydrationTimer = useRef<number | null>(null)
 
@@ -515,7 +562,50 @@ export default function App() {
     setInvoiceGenerated(false)
     setShowReceiptPrinter(false)
     setReceiptStage("processing")
+    setInvoiceError("")
   }, [clearGenerationTimers])
+
+  useEffect(() => {
+    const query = productSearch.query.trim()
+
+    if (!productSearch.activeItemId || query.length < 2) {
+      return
+    }
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setProductSearch((current) => ({ ...current, loading: true }))
+
+      try {
+        const response = await fetch(
+          `/api/products?q=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        )
+        if (!response.ok) throw new Error("Product search failed")
+
+        const data = (await response.json()) as {
+          products?: ProductSuggestion[]
+        }
+        setProductSearch((current) => ({
+          ...current,
+          loading: false,
+          products: Array.isArray(data.products) ? data.products : [],
+        }))
+      } catch {
+        if (controller.signal.aborted) return
+        setProductSearch((current) => ({
+          ...current,
+          loading: false,
+          products: [],
+        }))
+      }
+    }, 220)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [productSearch.activeItemId, productSearch.query])
 
   // Field helpers
   const setField = useCallback(
@@ -553,6 +643,86 @@ export default function App() {
         items: s.items.map((it) =>
           it.id === id ? { ...it, [key]: value } : it
         ),
+      }))
+    },
+    [markInvoiceDirty]
+  )
+
+  const updateItemDescription = useCallback(
+    (id: string, description: string) => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        items: s.items.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                description,
+                productId: undefined,
+                productSku: undefined,
+                productStockQty: undefined,
+              }
+            : it
+        ),
+      }))
+      setProductSearch((current) => ({
+        ...current,
+        activeItemId: id,
+        loading: false,
+        products: description.trim().length < 2 ? [] : current.products,
+        query: description,
+      }))
+    },
+    [markInvoiceDirty]
+  )
+
+  const selectProduct = useCallback(
+    (itemId: string, product: ProductSuggestion) => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          if (it.id !== itemId) return it
+
+          const nextQty = Number(it.qty) > 0 ? Number(it.qty) : 1
+
+          return {
+            ...it,
+            description: product.name,
+            price: product.price,
+            taxRate: product.taxRate,
+            qty: Math.min(nextQty, product.stockQty),
+            productId: product._id,
+            productSku: product.sku,
+            productStockQty: product.stockQty,
+          }
+        }),
+      }))
+      setProductSearch({
+        activeItemId: null,
+        loading: false,
+        products: [],
+        query: "",
+      })
+    },
+    [markInvoiceDirty]
+  )
+
+  const updateItemQty = useCallback(
+    (id: string, qty: number) => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          if (it.id !== id) return it
+          const normalizedQty = Math.max(0, qty)
+          const limitedQty =
+            typeof it.productStockQty === "number"
+              ? Math.min(normalizedQty, it.productStockQty)
+              : normalizedQty
+
+          return { ...it, qty: limitedQty }
+        }),
       }))
     },
     [markInvoiceDirty]
@@ -664,11 +834,97 @@ export default function App() {
     return { subtotal, discountAmount, taxable, taxAmount, total, lines }
   }, [items])
 
-  const handleGenerateInvoice = useCallback(() => {
+  const handleGenerateInvoice = useCallback(async () => {
     clearGenerationTimers()
     setInvoiceGenerated(false)
-    setShowReceiptPrinter(true)
+    setInvoiceError("")
+    setIsSavingInvoice(true)
     setReceiptStage("processing")
+
+    const invalidStockItem = state.items.find(
+      (item) =>
+        item.productId &&
+        typeof item.productStockQty === "number" &&
+        Number(item.qty) > item.productStockQty
+    )
+
+    if (invalidStockItem) {
+      setInvoiceError(
+        `${invalidStockItem.description} only has ${invalidStockItem.productStockQty} in stock.`
+      )
+      setIsSavingInvoice(false)
+      return
+    }
+
+    try {
+      const response = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceNumber: meta.number,
+          clientName: client.name || "Client",
+          issueDate: meta.issueDate,
+          dueDate: meta.dueDate,
+          currency,
+          items: state.items.map((item) => ({
+            description: item.description,
+            qty: item.qty,
+            price: item.price,
+            discount: item.discount,
+            taxRate: item.taxRate,
+            taxMode: item.taxMode,
+            productId: item.productId,
+          })),
+          subtotal: calc.subtotal,
+          taxAmount: calc.taxAmount,
+          total: calc.total,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; errors?: string[] }
+          | null
+        throw new Error(
+          data?.error || data?.errors?.join(", ") || "Invoice creation failed"
+        )
+      }
+
+      const reductions = new Map<string, number>()
+      state.items.forEach((item) => {
+        if (!item.productId) return
+        reductions.set(
+          item.productId,
+          (reductions.get(item.productId) ?? 0) + Number(item.qty || 0)
+        )
+      })
+
+      setState((s) => ({
+        ...s,
+        items: s.items.map((item) => {
+          if (!item.productId || typeof item.productStockQty !== "number") {
+            return item
+          }
+
+          return {
+            ...item,
+            productStockQty: Math.max(
+              0,
+              item.productStockQty - (reductions.get(item.productId) ?? 0)
+            ),
+          }
+        }),
+      }))
+    } catch (error) {
+      setInvoiceError(
+        error instanceof Error ? error.message : "Invoice creation failed"
+      )
+      setIsSavingInvoice(false)
+      return
+    }
+
+    setIsSavingInvoice(false)
+    setShowReceiptPrinter(true)
 
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
@@ -687,7 +943,7 @@ export default function App() {
     }, 4300)
 
     generationTimers.current = [printingTimer, completeTimer]
-  }, [clearGenerationTimers, router, state])
+  }, [calc, clearGenerationTimers, client.name, currency, meta, router, state])
 
   const handleReplayReceipt = useCallback(() => {
     clearGenerationTimers()
@@ -717,6 +973,48 @@ export default function App() {
   const handlePrint = useCallback(() => {
     window.print()
   }, [])
+
+  const handleProductImport = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      setIsImporting(true)
+      setImportError("")
+      setImportSummary(null)
+
+      try {
+        const formData = new FormData()
+        formData.append("file", file)
+
+        const response = await fetch("/api/products/import", {
+          method: "POST",
+          body: formData,
+        })
+        const data = (await response.json().catch(() => null)) as
+          | (ImportSummary & { error?: string })
+          | null
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Product import failed")
+        }
+
+        setImportSummary({
+          inserted: Number(data?.inserted) || 0,
+          updated: Number(data?.updated) || 0,
+          failed: Number(data?.failed) || 0,
+        })
+      } catch (error) {
+        setImportError(
+          error instanceof Error ? error.message : "Product import failed"
+        )
+      } finally {
+        setIsImporting(false)
+        event.target.value = ""
+      }
+    },
+    []
+  )
 
   const isGenerating = showReceiptPrinter && !invoiceGenerated
 
@@ -754,6 +1052,13 @@ export default function App() {
               </Button>
             ) : (
               <>
+                <Link
+                  className="btn-ghost"
+                  href="/inventory"
+                  aria-label="Open inventory"
+                >
+                  Inventory
+                </Link>
                 <Button
                   className="btn-ghost"
                   onClick={loadSample}
@@ -1042,17 +1347,92 @@ export default function App() {
                   </div>
                   {items.map((it) => {
                     const line = calc.lines.find((entry) => entry.id === it.id)
+                    const isSearchingThisItem =
+                      productSearch.activeItemId === it.id
+                    const hasStockLimit =
+                      typeof it.productStockQty === "number"
                     return (
                       <div className="item-row" key={it.id}>
-                        <Input
-                          className="in item-desc"
-                          value={it.description}
-                          onChange={(e) =>
-                            updateItem(it.id, "description", e.target.value)
-                          }
-                          placeholder="Design services"
-                          aria-label="Item description"
-                        />
+                        <div className="product-picker">
+                          <Input
+                            className="in item-desc"
+                            value={it.description}
+                            onChange={(e) =>
+                              updateItemDescription(it.id, e.target.value)
+                            }
+                            onFocus={() =>
+                              setProductSearch((current) => ({
+                                ...current,
+                                activeItemId: it.id,
+                                loading: false,
+                                products:
+                                  it.description.trim().length < 2
+                                    ? []
+                                    : current.products,
+                                query: it.description,
+                              }))
+                            }
+                            onBlur={() => {
+                              window.setTimeout(() => {
+                                setProductSearch((current) =>
+                                  current.activeItemId === it.id
+                                    ? {
+                                        activeItemId: null,
+                                        loading: false,
+                                        products: [],
+                                        query: "",
+                                      }
+                                    : current
+                                )
+                              }, 120)
+                            }}
+                            placeholder="Search products or type manually"
+                            aria-label="Item description"
+                            autoComplete="off"
+                          />
+                          {hasStockLimit && (
+                            <div className="stock-hint">
+                              <span>SKU {it.productSku}</span>
+                              <strong>{it.productStockQty} available</strong>
+                            </div>
+                          )}
+                          {isSearchingThisItem &&
+                            (productSearch.products.length > 0 ||
+                              productSearch.loading) && (
+                              <div className="product-suggestions">
+                                {productSearch.loading ? (
+                                  <div className="product-suggestion is-muted">
+                                    Searching products...
+                                  </div>
+                                ) : (
+                                  productSearch.products.map((product) => (
+                                    <button
+                                      className="product-suggestion"
+                                      key={product._id}
+                                      type="button"
+                                      onMouseDown={(event) =>
+                                        event.preventDefault()
+                                      }
+                                      onClick={() =>
+                                        selectProduct(it.id, product)
+                                      }
+                                    >
+                                      <span>
+                                        <strong>{product.name}</strong>
+                                        <small>
+                                          {product.sku}
+                                          {product.category
+                                            ? ` - ${product.category}`
+                                            : ""}
+                                        </small>
+                                      </span>
+                                      <em>{product.stockQty} in stock</em>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                        </div>
                         <div className="item-control item-qty">
                           <span>Qty</span>
                           <Input
@@ -1062,9 +1442,8 @@ export default function App() {
                             step="1"
                             value={it.qty}
                             onChange={(e) =>
-                              updateItem(
+                              updateItemQty(
                                 it.id,
-                                "qty",
                                 e.target.value === ""
                                   ? 0
                                   : Number(e.target.value)
@@ -1156,6 +1535,38 @@ export default function App() {
                 >
                   <IconPlus /> Add item
                 </Button>
+                <div className="import-strip">
+                  <input
+                    ref={importInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept=".csv,.xls,.xlsx"
+                    onChange={handleProductImport}
+                    aria-label="Import products"
+                  />
+                  <Button
+                    className="btn-import"
+                    type="button"
+                    variant="outline"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={isImporting}
+                  >
+                    <UploadIcon aria-hidden="true" />{" "}
+                    {isImporting ? "Importing..." : "Import products"}
+                  </Button>
+                  {importSummary && (
+                    <span className="import-status">
+                      {importSummary.inserted} inserted,{" "}
+                      {importSummary.updated} updated, {importSummary.failed}{" "}
+                      failed
+                    </span>
+                  )}
+                  {importError && (
+                    <span className="import-status is-error">
+                      {importError}
+                    </span>
+                  )}
+                </div>
               </Panel>
 
               <Panel title="Totals & Notes">
@@ -1197,13 +1608,20 @@ export default function App() {
                 <Button
                   className="btn-primary btn-generate"
                   onClick={handleGenerateInvoice}
-                  disabled={isGenerating}
+                  disabled={isGenerating || isSavingInvoice}
                   aria-label="Generate invoice"
                 >
                   <IconReceipt />{" "}
-                  {isGenerating ? "Generating..." : "Generate Invoice"}
+                  {isGenerating || isSavingInvoice
+                    ? "Generating..."
+                    : "Generate Invoice"}
                 </Button>
               </div>
+              {invoiceError && (
+                <p className="invoice-error" role="alert">
+                  {invoiceError}
+                </p>
+              )}
             </section>
           )}
 
