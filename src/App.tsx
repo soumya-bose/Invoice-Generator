@@ -1,8 +1,15 @@
-"use client"
+﻿"use client"
 
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
-import { useState, useMemo, useCallback, useEffect, useRef } from "react"
+import {
+  type ReactNode,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react"
 import { CalendarIcon, ChevronDownIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -31,19 +38,82 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { ReceiptPrinter } from "@/components/ReceiptPrinter"
 
-const CURRENCIES = [
-  { code: "USD", symbol: "$", label: "USD — US Dollar" },
-  { code: "EUR", symbol: "€", label: "EUR — Euro" },
-  { code: "GBP", symbol: "£", label: "GBP — British Pound" },
-  { code: "TRY", symbol: "₺", label: "TRY — Turkish Lira" },
-  { code: "JPY", symbol: "¥", label: "JPY — Japanese Yen" },
-  { code: "CAD", symbol: "$", label: "CAD — Canadian Dollar" },
-  { code: "AUD", symbol: "$", label: "AUD — Australian Dollar" },
-  { code: "INR", symbol: "₹", label: "INR — Indian Rupee" },
+type CurrencyCode = "USD" | "EUR" | "GBP" | "TRY" | "JPY" | "CAD" | "AUD" | "INR"
+type TaxMode = "exclusive" | "inclusive"
+type ReceiptStage = "processing" | "printing" | "complete"
+
+type Party = {
+  name: string
+  email: string
+  address: string
+  city: string
+  state: string
+  zip: string
+  phone?: string
+  gstNo: string
+}
+
+type InvoiceMeta = {
+  number: string
+  issueDate: string
+  dueDate: string
+  currency: CurrencyCode
+}
+
+type InvoiceItem = {
+  id: string
+  description: string
+  qty: number
+  price: number
+  discount: number
+  taxRate: number
+  taxMode: TaxMode
+}
+
+type InvoiceState = {
+  business: Required<Party>
+  client: Omit<Party, "phone"> & { phone?: string }
+  meta: InvoiceMeta
+  items: InvoiceItem[]
+  taxRate: number
+  discount: number
+  notes: string
+}
+
+type CalcLine = {
+  id: string
+  amount: number
+  discountAmount: number
+  taxable: number
+  taxAmount: number
+  total: number
+}
+
+type InvoiceCalc = {
+  subtotal: number
+  discountAmount: number
+  taxable: number
+  taxAmount: number
+  total: number
+  lines: CalcLine[]
+}
+
+const CURRENCIES: Array<{
+  code: CurrencyCode
+  symbol: string
+  name: string
+}> = [
+  { code: "USD", symbol: "$", name: "US Dollar" },
+  { code: "EUR", symbol: "\u20ac", name: "Euro" },
+  { code: "GBP", symbol: "\u00a3", name: "British Pound" },
+  { code: "TRY", symbol: "\u20ba", name: "Turkish Lira" },
+  { code: "JPY", symbol: "\u00a5", name: "Japanese Yen" },
+  { code: "CAD", symbol: "$", name: "Canadian Dollar" },
+  { code: "AUD", symbol: "$", name: "Australian Dollar" },
+  { code: "INR", symbol: "\u20b9", name: "Indian Rupee" },
 ]
 
 const STORAGE_KEY = "invoice-generator-v1"
-const DISCOUNT_OPTIONS = [0, 2.5, 5, 10, 15, 20]
 const TAX_OPTIONS = [0, 5, 8, 12, 18, 28]
 
 let uid = 0
@@ -53,15 +123,32 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function plusDaysISO(days) {
+function plusDaysISO(days: number) {
   const d = new Date()
   d.setDate(d.getDate() + days)
   return d.toISOString().slice(0, 10)
 }
 
-const DEFAULT_STATE = {
-  business: { name: "", email: "", address: "", phone: "", gstNo: "" },
-  client: { name: "", email: "", address: "", gstNo: "" },
+const DEFAULT_STATE: InvoiceState = {
+  business: {
+    name: "",
+    email: "",
+    address: "",
+    city: "",
+    state: "",
+    zip: "",
+    phone: "",
+    gstNo: "",
+  },
+  client: {
+    name: "",
+    email: "",
+    address: "",
+    city: "",
+    state: "",
+    zip: "",
+    gstNo: "",
+  },
   meta: {
     number: "INV-0001",
     issueDate: todayISO(),
@@ -84,18 +171,24 @@ const DEFAULT_STATE = {
   notes: "Thank you for your business!",
 }
 
-const SAMPLE_STATE = {
+const SAMPLE_STATE: InvoiceState = {
   business: {
     name: "Acme Studio",
     email: "hello@acmestudio.com",
-    address: "123 Market St, Suite 4\nSan Francisco, CA 94103",
+    address: "123 Market St, Suite 4",
+    city: "San Francisco",
+    state: "CA",
+    zip: "94103",
     phone: "+1 (555) 018-2245",
     gstNo: "29ABCDE1234F1Z5",
   },
   client: {
     name: "Nova Coffee Co.",
     email: "billing@novacoffee.com",
-    address: "456 Client Ave\nNew York, NY 10012",
+    address: "456 Client Ave",
+    city: "New York",
+    state: "NY",
+    zip: "10012",
     gstNo: "27AAACN0000A1Z5",
   },
   meta: {
@@ -139,36 +232,105 @@ const SAMPLE_STATE = {
     "Payment due within 14 days via bank transfer.\nThank you for your business!",
 }
 
-function loadState() {
+type StoredInvoiceState = Partial<
+  Omit<InvoiceState, "business" | "client" | "meta" | "items">
+> & {
+  business?: Partial<InvoiceState["business"]>
+  client?: Partial<InvoiceState["client"]>
+  meta?: Partial<InvoiceMeta>
+  items?: Array<Partial<InvoiceItem>>
+}
+
+function isCurrencyCode(value: unknown): value is CurrencyCode {
+  return CURRENCIES.some((currency) => currency.code === value)
+}
+
+function isTaxMode(value: unknown): value is TaxMode {
+  return value === "exclusive" || value === "inclusive"
+}
+
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
+function normalizeParty<T extends Party>(
+  defaults: T,
+  saved?: Partial<T>
+): T {
+  const savedAddress = asString(saved?.address, defaults.address)
+  const addressLines = savedAddress
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const migratedAddress = addressLines[0] || savedAddress
+  const migratedCity =
+    asString(saved?.city) || addressLines.slice(1).join(", ")
+
+  return {
+    ...defaults,
+    ...saved,
+    name: asString(saved?.name, defaults.name),
+    email: asString(saved?.email, defaults.email),
+    address: migratedAddress,
+    city: migratedCity,
+    state: asString(saved?.state, defaults.state),
+    zip: asString(saved?.zip, defaults.zip),
+    phone: asString(saved?.phone, defaults.phone),
+    gstNo: asString(saved?.gstNo, defaults.gstNo),
+  }
+}
+
+function loadState(): InvoiceState {
+  if (typeof window === "undefined") return DEFAULT_STATE
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_STATE
-    const parsed = JSON.parse(raw)
+    const parsed = JSON.parse(raw) as StoredInvoiceState
+    const metaCurrency = isCurrencyCode(parsed.meta?.currency)
+      ? parsed.meta.currency
+      : DEFAULT_STATE.meta.currency
+    const meta = {
+      ...DEFAULT_STATE.meta,
+      ...parsed.meta,
+      number: asString(parsed.meta?.number, DEFAULT_STATE.meta.number),
+      issueDate: asString(parsed.meta?.issueDate, DEFAULT_STATE.meta.issueDate),
+      dueDate: asString(parsed.meta?.dueDate, DEFAULT_STATE.meta.dueDate),
+      currency: metaCurrency,
+    }
+
     return {
       ...DEFAULT_STATE,
       ...parsed,
-      business: { ...DEFAULT_STATE.business, ...parsed.business },
-      client: { ...DEFAULT_STATE.client, ...parsed.client },
-      meta: { ...DEFAULT_STATE.meta, ...parsed.meta },
+      business: normalizeParty(DEFAULT_STATE.business, parsed.business),
+      client: normalizeParty(DEFAULT_STATE.client, parsed.client),
+      meta,
       items:
         Array.isArray(parsed.items) && parsed.items.length
           ? parsed.items.map((i) => ({
-              id: i.id || newId(),
-              description: i.description || "",
-              qty: i.qty ?? 1,
-              price: i.price ?? 0,
-              discount: i.discount ?? parsed.discount ?? 0,
-              taxRate: i.taxRate ?? parsed.taxRate ?? 0,
-              taxMode: i.taxMode || "exclusive",
+              id: asString(i.id) || newId(),
+              description: asString(i.description),
+              qty: asNumber(i.qty, 1),
+              price: asNumber(i.price),
+              discount: asNumber(i.discount, asNumber(parsed.discount)),
+              taxRate: asNumber(i.taxRate, asNumber(parsed.taxRate)),
+              taxMode: isTaxMode(i.taxMode) ? i.taxMode : "exclusive",
             }))
           : DEFAULT_STATE.items,
+      taxRate: asNumber(parsed.taxRate, DEFAULT_STATE.taxRate),
+      discount: asNumber(parsed.discount, DEFAULT_STATE.discount),
+      notes: asString(parsed.notes, DEFAULT_STATE.notes),
     }
   } catch {
     return DEFAULT_STATE
   }
 }
 
-function formatMoney(value, currency) {
+function formatMoney(value: number, currency: CurrencyCode) {
   const num = Number.isFinite(value) ? value : 0
   try {
     return new Intl.NumberFormat("en-US", {
@@ -182,8 +344,8 @@ function formatMoney(value, currency) {
   }
 }
 
-function formatDateLabel(iso) {
-  if (!iso) return "—"
+function formatDateLabel(iso: string) {
+  if (!iso) return "-"
   const d = new Date(iso + "T00:00:00")
   if (Number.isNaN(d.getTime())) return iso
   return new Intl.DateTimeFormat("en-US", {
@@ -193,13 +355,13 @@ function formatDateLabel(iso) {
   }).format(d)
 }
 
-function isoToDate(iso) {
+function isoToDate(iso: string) {
   if (!iso) return undefined
   const date = new Date(iso + "T00:00:00")
   return Number.isNaN(date.getTime()) ? undefined : date
 }
 
-function dateToISO(date) {
+function dateToISO(date: Date) {
   if (!date) return ""
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, "0")
@@ -208,12 +370,94 @@ function dateToISO(date) {
   return `${year}-${month}-${day}`
 }
 
+function formatCityStateZip(party: Pick<Party, "city" | "state" | "zip">) {
+  const cityState = [party.city, party.state].filter(Boolean).join(", ")
+
+  return [cityState, party.zip].filter(Boolean).join(" - ")
+}
+
+function numberToWords(value: number): string {
+  const ones = [
+    "",
+    "One",
+    "Two",
+    "Three",
+    "Four",
+    "Five",
+    "Six",
+    "Seven",
+    "Eight",
+    "Nine",
+    "Ten",
+    "Eleven",
+    "Twelve",
+    "Thirteen",
+    "Fourteen",
+    "Fifteen",
+    "Sixteen",
+    "Seventeen",
+    "Eighteen",
+    "Nineteen",
+  ]
+  const tens = [
+    "",
+    "",
+    "Twenty",
+    "Thirty",
+    "Forty",
+    "Fifty",
+    "Sixty",
+    "Seventy",
+    "Eighty",
+    "Ninety",
+  ]
+
+  function belowThousand(num: number) {
+    const parts: string[] = []
+    const hundred = Math.floor(num / 100)
+    const rest = num % 100
+
+    if (hundred) parts.push(`${ones[hundred]} Hundred`)
+    if (rest < 20) {
+      if (rest) parts.push(ones[rest])
+    } else {
+      const ten = Math.floor(rest / 10)
+      const one = rest % 10
+      parts.push([tens[ten], ones[one]].filter(Boolean).join(" "))
+    }
+
+    return parts.join(" ")
+  }
+
+  const whole = Math.max(0, Math.floor(value))
+  if (whole === 0) return "Zero"
+
+  const scales = [
+    { value: 1_000_000_000, label: "Billion" },
+    { value: 1_000_000, label: "Million" },
+    { value: 1_000, label: "Thousand" },
+  ]
+  const parts: string[] = []
+  let remainder = whole
+
+  scales.forEach((scale) => {
+    const count = Math.floor(remainder / scale.value)
+    if (!count) return
+    parts.push(`${belowThousand(count)} ${scale.label}`)
+    remainder %= scale.value
+  })
+
+  if (remainder) parts.push(belowThousand(remainder))
+
+  return parts.join(" ")
+}
+
 export default function App() {
   const pathname = usePathname()
   const router = useRouter()
-  const [state, setState] = useState(DEFAULT_STATE)
+  const [state, setState] = useState<InvoiceState>(DEFAULT_STATE)
   const isLoaded = useRef(false)
-  const [receiptStage, setReceiptStage] = useState(() =>
+  const [receiptStage, setReceiptStage] = useState<ReceiptStage>(() =>
     pathname === "/invoice" ? "complete" : "processing"
   )
   const [showReceiptPrinter, setShowReceiptPrinter] = useState(
@@ -222,26 +466,36 @@ export default function App() {
   const [invoiceGenerated, setInvoiceGenerated] = useState(
     () => pathname === "/invoice"
   )
-  const generationTimers = useRef([])
+  const generationTimers = useRef<number[]>([])
+  const hydrationTimer = useRef<number | null>(null)
 
   const { business, client, meta, items, notes } = state
   const isInvoiceRoute = pathname === "/invoice"
 
   useEffect(() => {
-    setState(loadState())
-    isLoaded.current = true
+    hydrationTimer.current = window.setTimeout(() => {
+      isLoaded.current = true
+      setState(loadState())
+    }, 0)
+
+    return () => {
+      if (hydrationTimer.current !== null) {
+        window.clearTimeout(hydrationTimer.current)
+        hydrationTimer.current = null
+      }
+    }
   }, [])
 
   useEffect(() => {
     if (!isLoaded.current) return
-    const t = setTimeout(() => {
+    const t = window.setTimeout(() => {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
       } catch {
         /* ignore quota errors */
       }
     }, 300)
-    return () => clearTimeout(t)
+    return () => window.clearTimeout(t)
   }, [state])
 
   const clearGenerationTimers = useCallback(() => {
@@ -252,15 +506,24 @@ export default function App() {
   useEffect(() => clearGenerationTimers, [clearGenerationTimers])
 
   const markInvoiceDirty = useCallback(() => {
+    if (hydrationTimer.current !== null) {
+      window.clearTimeout(hydrationTimer.current)
+      hydrationTimer.current = null
+      isLoaded.current = true
+    }
     clearGenerationTimers()
     setInvoiceGenerated(false)
     setShowReceiptPrinter(false)
     setReceiptStage("processing")
   }, [clearGenerationTimers])
 
-  // ── field helpers ────────────────────────────────
+  // Field helpers
   const setField = useCallback(
-    (section, key, value) => {
+    <Section extends "business" | "client" | "meta">(
+      section: Section,
+      key: keyof InvoiceState[Section],
+      value: InvoiceState[Section][keyof InvoiceState[Section]]
+    ) => {
       markInvoiceDirty()
       setState((s) => ({ ...s, [section]: { ...s[section], [key]: value } }))
     },
@@ -268,7 +531,10 @@ export default function App() {
   )
 
   const setTop = useCallback(
-    (key, value) => {
+    <Key extends keyof Pick<InvoiceState, "notes" | "taxRate" | "discount">>(
+      key: Key,
+      value: InvoiceState[Key]
+    ) => {
       markInvoiceDirty()
       setState((s) => ({ ...s, [key]: value }))
     },
@@ -276,7 +542,11 @@ export default function App() {
   )
 
   const updateItem = useCallback(
-    (id, key, value) => {
+    <Key extends keyof InvoiceItem>(
+      id: string,
+      key: Key,
+      value: InvoiceItem[Key]
+    ) => {
       markInvoiceDirty()
       setState((s) => ({
         ...s,
@@ -308,7 +578,7 @@ export default function App() {
   }, [markInvoiceDirty])
 
   const removeItem = useCallback(
-    (id) => {
+    (id: string) => {
       markInvoiceDirty()
       setState((s) => ({
         ...s,
@@ -321,7 +591,7 @@ export default function App() {
 
   const resetAll = useCallback(() => {
     markInvoiceDirty()
-    const fresh = {
+    const fresh: InvoiceState = {
       ...DEFAULT_STATE,
       items: [
         {
@@ -347,6 +617,8 @@ export default function App() {
     markInvoiceDirty()
     setState({
       ...SAMPLE_STATE,
+      business: { ...SAMPLE_STATE.business },
+      client: { ...SAMPLE_STATE.client },
       items: SAMPLE_STATE.items.map((it) => ({ ...it, id: newId() })),
       meta: {
         ...SAMPLE_STATE.meta,
@@ -356,12 +628,12 @@ export default function App() {
     })
   }, [markInvoiceDirty])
 
-  // ── calculations ─────────────────────────────────
+  // Calculations
   const currency = meta.currency
   const currencyMeta =
     CURRENCIES.find((c) => c.code === currency) || CURRENCIES[0]
 
-  const calc = useMemo(() => {
+  const calc = useMemo<InvoiceCalc>(() => {
     const lines = items.map((it) => {
       const qty = Number(it.qty) || 0
       const price = Number(it.price) || 0
@@ -505,7 +777,7 @@ export default function App() {
       {/* Main */}
       <main className="main">
         <div className={isInvoiceRoute ? "invoice-view" : "form-view"}>
-          {/* ─── Editor ─────────────────────────── */}
+          {/* Editor */}
           {!isInvoiceRoute && (
             <section className="editor no-print" aria-label="Invoice editor">
               <Panel title="Your Business">
@@ -555,15 +827,47 @@ export default function App() {
                     />
                   </Field>
                   <Field label="Address" full>
-                    <Textarea
-                      className="in ta"
-                      rows={2}
+                    <Input
+                      className="in"
                       value={business.address}
                       onChange={(e) =>
                         setField("business", "address", e.target.value)
                       }
-                      placeholder="123 Market St, Suite 4&#10;San Francisco, CA"
+                      placeholder="123 Market St, Suite 4"
                       aria-label="Business address"
+                    />
+                  </Field>
+                  <Field label="City">
+                    <Input
+                      className="in"
+                      value={business.city}
+                      onChange={(e) =>
+                        setField("business", "city", e.target.value)
+                      }
+                      placeholder="San Francisco"
+                      aria-label="Business city"
+                    />
+                  </Field>
+                  <Field label="State">
+                    <Input
+                      className="in"
+                      value={business.state}
+                      onChange={(e) =>
+                        setField("business", "state", e.target.value)
+                      }
+                      placeholder="CA"
+                      aria-label="Business state"
+                    />
+                  </Field>
+                  <Field label="ZIP">
+                    <Input
+                      className="in"
+                      value={business.zip}
+                      onChange={(e) =>
+                        setField("business", "zip", e.target.value)
+                      }
+                      placeholder="94103"
+                      aria-label="Business ZIP code"
                     />
                   </Field>
                 </div>
@@ -605,15 +909,47 @@ export default function App() {
                     />
                   </Field>
                   <Field label="Address" full>
-                    <Textarea
-                      className="in ta"
-                      rows={2}
+                    <Input
+                      className="in"
                       value={client.address}
                       onChange={(e) =>
                         setField("client", "address", e.target.value)
                       }
-                      placeholder="456 Client Ave&#10;New York, NY"
+                      placeholder="456 Client Ave"
                       aria-label="Client address"
+                    />
+                  </Field>
+                  <Field label="City">
+                    <Input
+                      className="in"
+                      value={client.city}
+                      onChange={(e) =>
+                        setField("client", "city", e.target.value)
+                      }
+                      placeholder="New York"
+                      aria-label="Client city"
+                    />
+                  </Field>
+                  <Field label="State">
+                    <Input
+                      className="in"
+                      value={client.state}
+                      onChange={(e) =>
+                        setField("client", "state", e.target.value)
+                      }
+                      placeholder="NY"
+                      aria-label="Client state"
+                    />
+                  </Field>
+                  <Field label="ZIP">
+                    <Input
+                      className="in"
+                      value={client.zip}
+                      onChange={(e) =>
+                        setField("client", "zip", e.target.value)
+                      }
+                      placeholder="10012"
+                      aria-label="Client ZIP code"
                     />
                   </Field>
                 </div>
@@ -636,6 +972,7 @@ export default function App() {
                     <Select
                       value={meta.currency}
                       onValueChange={(value) =>
+                        isCurrencyCode(value) &&
                         setField("meta", "currency", value)
                       }
                     >
@@ -667,7 +1004,7 @@ export default function App() {
                           >
                             <span className="currency-option">
                               <span>{c.code}</span>
-                              <span>{c.label.replace(`${c.code} — `, "")}</span>
+                              <span>{c.name}</span>
                             </span>
                           </SelectItem>
                         ))}
@@ -729,7 +1066,7 @@ export default function App() {
                                 it.id,
                                 "qty",
                                 e.target.value === ""
-                                  ? ""
+                                  ? 0
                                   : Number(e.target.value)
                               )
                             }
@@ -749,7 +1086,7 @@ export default function App() {
                                 it.id,
                                 "price",
                                 e.target.value === ""
-                                  ? ""
+                                  ? 0
                                   : Number(e.target.value)
                               )
                             }
@@ -758,13 +1095,23 @@ export default function App() {
                         </div>
                         <div className="item-control item-discount">
                           <span>Disc</span>
-                          <RateDropdown
-                            label="Discount"
+                          <Input
+                            className="in item-num"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.01"
                             value={it.discount}
-                            options={DISCOUNT_OPTIONS}
-                            onChange={(value) =>
-                              updateItem(it.id, "discount", value)
+                            onChange={(e) =>
+                              updateItem(
+                                it.id,
+                                "discount",
+                                e.target.value === ""
+                                  ? 0
+                                  : Number(e.target.value)
+                              )
                             }
+                            aria-label="Discount percent"
                           />
                         </div>
                         <div className="item-control item-tax">
@@ -839,7 +1186,7 @@ export default function App() {
                       rows={2}
                       value={notes}
                       onChange={(e) => setTop("notes", e.target.value)}
-                      placeholder="Payment terms, thank-you note…"
+                      placeholder="Payment terms, thank-you note..."
                       aria-label="Notes"
                     />
                   </Field>
@@ -860,7 +1207,7 @@ export default function App() {
             </section>
           )}
 
-          {/* ─── Preview ────────────────────────── */}
+          {/* Preview */}
           {!isInvoiceRoute && showReceiptPrinter && (
             <section
               className="generation-overlay"
@@ -1130,143 +1477,6 @@ export default function App() {
                   meta={meta}
                   notes={notes}
                 />
-
-                <div className="invoice-paper legacy-invoice-paper">
-                  <div className="inv-top">
-                    <div className="inv-brand">
-                      <div className="inv-brand-name">
-                        {business.name || "Your Business"}
-                      </div>
-                      <div className="inv-brand-meta">
-                        {business.email && <div>{business.email}</div>}
-                        {business.phone && <div>{business.phone}</div>}
-                        {business.gstNo && <div>GST No. {business.gstNo}</div>}
-                        {business.address && (
-                          <div className="inv-multiline">
-                            {business.address}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="inv-title-block">
-                      <div className="inv-title">INVOICE</div>
-                      <div className="inv-number">{meta.number || "—"}</div>
-                    </div>
-                  </div>
-
-                  <div className="inv-parties">
-                    <div className="inv-party">
-                      <div className="inv-party-label">Bill To</div>
-                      <div className="inv-party-name">
-                        {client.name || "Client name"}
-                      </div>
-                      <div className="inv-party-meta">
-                        {client.email && <div>{client.email}</div>}
-                        {client.gstNo && <div>GST No. {client.gstNo}</div>}
-                        {client.address && (
-                          <div className="inv-multiline">{client.address}</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="inv-dates">
-                      <div className="inv-date-row">
-                        <span>Issue date</span>
-                        <strong>{formatDateLabel(meta.issueDate)}</strong>
-                      </div>
-                      <div className="inv-date-row">
-                        <span>Due date</span>
-                        <strong>{formatDateLabel(meta.dueDate)}</strong>
-                      </div>
-                      <div className="inv-date-row total-due">
-                        <span>Amount due</span>
-                        <strong>{formatMoney(calc.total, currency)}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  <table className="inv-table">
-                    <thead>
-                      <tr>
-                        <th className="t-desc">Description</th>
-                        <th className="t-qty">Qty</th>
-                        <th className="t-price">Price</th>
-                        <th className="t-price">Disc</th>
-                        <th className="t-price">Tax</th>
-                        <th className="t-amt">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((it) => {
-                        const line = calc.lines.find(
-                          (entry) => entry.id === it.id
-                        )
-
-                        return (
-                          <tr key={it.id}>
-                            <td className="t-desc">
-                              {it.description || (
-                                <span className="t-empty">
-                                  Item description
-                                </span>
-                              )}
-                            </td>
-                            <td className="t-qty">{Number(it.qty) || 0}</td>
-                            <td className="t-price">
-                              {formatMoney(Number(it.price) || 0, currency)}
-                            </td>
-                            <td className="t-price">
-                              {Number(it.discount) || 0}%
-                            </td>
-                            <td className="t-price">
-                              {Number(it.taxRate) || 0}%
-                            </td>
-                            <td className="t-amt">
-                              {formatMoney(line?.total ?? 0, currency)}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-
-                  <div className="inv-summary">
-                    <div className="inv-sum-inner">
-                      <div className="sum-row">
-                        <span>Subtotal</span>
-                        <span>{formatMoney(calc.subtotal, currency)}</span>
-                      </div>
-                      {calc.discountAmount > 0 && (
-                        <div className="sum-row">
-                          <span>Line discounts</span>
-                          <span>
-                            −{formatMoney(calc.discountAmount, currency)}
-                          </span>
-                        </div>
-                      )}
-                      {calc.taxAmount > 0 && (
-                        <div className="sum-row">
-                          <span>Tax</span>
-                          <span>{formatMoney(calc.taxAmount, currency)}</span>
-                        </div>
-                      )}
-                      <div className="sum-row grand">
-                        <span>Total</span>
-                        <span>{formatMoney(calc.total, currency)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {notes && (
-                    <div className="inv-notes">
-                      <div className="inv-notes-label">Notes</div>
-                      <div className="inv-notes-text">{notes}</div>
-                    </div>
-                  )}
-
-                  <div className="inv-foot">
-                    Generated with Invoice Generator · {currencyMeta.code}
-                  </div>
-                </div>
               </div>
             </section>
           )}
@@ -1278,8 +1488,14 @@ export default function App() {
   )
 }
 
-/* ─── Small building blocks ────────────────────── */
-function DatePicker({ ariaLabel, onChange, value }) {
+/* Small building blocks */
+type DatePickerProps = {
+  ariaLabel: string
+  onChange: (value: string) => void
+  value: string
+}
+
+function DatePicker({ ariaLabel, onChange, value }: DatePickerProps) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -1304,7 +1520,14 @@ function DatePicker({ ariaLabel, onChange, value }) {
   )
 }
 
-function RateDropdown({ label, onChange, options, value }) {
+type RateDropdownProps = {
+  label: string
+  onChange: (value: number) => void
+  options: number[]
+  value: number
+}
+
+function RateDropdown({ label, onChange, options, value }: RateDropdownProps) {
   const current = Number(value) || 0
 
   return (
@@ -1339,7 +1562,12 @@ function RateDropdown({ label, onChange, options, value }) {
   )
 }
 
-function TaxModeDropdown({ onChange, value }) {
+type TaxModeDropdownProps = {
+  onChange: (value: TaxMode) => void
+  value: TaxMode
+}
+
+function TaxModeDropdown({ onChange, value }: TaxModeDropdownProps) {
   const label = value === "inclusive" ? "Inclusive" : "Exclusive"
 
   return (
@@ -1352,7 +1580,12 @@ function TaxModeDropdown({ onChange, value }) {
         <ChevronDownIcon aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="tax-mode-menu" align="end">
-        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(next) => {
+            if (isTaxMode(next)) onChange(next)
+          }}
+        >
           <DropdownMenuLabel className="rate-menu-label">
             Tax type
           </DropdownMenuLabel>
@@ -1368,6 +1601,16 @@ function TaxModeDropdown({ onChange, value }) {
   )
 }
 
+type TaxInvoiceDocumentProps = {
+  business: InvoiceState["business"]
+  calc: InvoiceCalc
+  client: InvoiceState["client"]
+  formatMoney: (value: number) => string
+  items: InvoiceItem[]
+  meta: InvoiceMeta
+  notes: string
+}
+
 function TaxInvoiceDocument({
   business,
   calc,
@@ -1375,7 +1618,8 @@ function TaxInvoiceDocument({
   formatMoney,
   items,
   meta,
-}) {
+  notes,
+}: TaxInvoiceDocumentProps) {
   const visibleItems = items
     .filter((it) => it.description || Number(it.qty) || Number(it.price))
     .slice(0, 16)
@@ -1384,19 +1628,14 @@ function TaxInvoiceDocument({
   })
   const roundedTotal = Math.round(calc.total)
   const roundOff = roundedTotal - calc.total
-  const businessAddressLines = String(business.address || "")
-    .split("\n")
-    .filter(Boolean)
-  const clientAddressLines = String(client.address || "")
-    .split("\n")
-    .filter(Boolean)
+  const totalInWords = `${numberToWords(roundedTotal)} Only`
   const businessName = business.name || "YOUR COMPANY NAME"
   const businessAddress =
-    businessAddressLines[0] || "Your Address Line 1, Your Address Line 2"
+    business.address || "Your Address Line 1, Your Address Line 2"
   const businessCity =
-    businessAddressLines.slice(1).join(", ") || "City, State - Pincode"
-  const clientAddress = clientAddressLines[0] || ""
-  const clientCity = clientAddressLines.slice(1).join(", ") || ""
+    formatCityStateZip(business) || "City, State - Pincode"
+  const clientAddress = client.address
+  const clientCity = [client.city, client.state].filter(Boolean).join(", ")
 
   return (
     <article className="tax-invoice-template" id="invoice">
@@ -1435,7 +1674,7 @@ function TaxInvoiceDocument({
             <div>
               <span>PIN/ZIP</span>
               <i>:</i>
-              <strong />
+              <strong>{client.zip}</strong>
             </div>
             <div>
               <span>GSTIN</span>
@@ -1525,7 +1764,12 @@ function TaxInvoiceDocument({
       </table>
 
       <section className="tax-summary">
-        <div className="tax-summary-space" />
+        <div className="tax-summary-space">
+          <div className="tax-amount-words">
+            <span>Amount in words</span>
+            <strong>{totalInWords}</strong>
+          </div>
+        </div>
         <div className="tax-summary-table">
           <div>
             <span>Sub Total</span>
@@ -1548,6 +1792,7 @@ function TaxInvoiceDocument({
 
       <section className="tax-terms">
         <div className="tax-terms-copy">
+          {notes && <p className="tax-notes">{notes}</p>}
           <h4>Terms & Conditions</h4>
           <ul>
             <li>Goods once sold will not be taken back or exchanged.</li>
@@ -1565,7 +1810,7 @@ function TaxInvoiceDocument({
   )
 }
 
-function Panel({ title, children }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="panel">
       <div className="panel-label">{title}</div>
@@ -1574,7 +1819,15 @@ function Panel({ title, children }) {
   )
 }
 
-function Field({ label, children, full }) {
+function Field({
+  label,
+  children,
+  full = false,
+}: {
+  label: string
+  children: ReactNode
+  full?: boolean
+}) {
   return (
     <FormField className={`field${full ? " full" : ""}`}>
       <FieldLabel className="field-label">{label}</FieldLabel>
@@ -1583,7 +1836,7 @@ function Field({ label, children, full }) {
   )
 }
 
-/* ─── Icons ─────────────────────────────────────── */
+/* Icons */
 function IconDownload() {
   return (
     <svg
