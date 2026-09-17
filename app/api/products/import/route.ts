@@ -25,6 +25,45 @@ const COLUMN_ALIASES: Record<string, string> = {
   taxrate: "taxRate",
 }
 
+const SAMPLE_PRODUCTS = [
+  {
+    name: "Desk Organizer",
+    sku: "STN-ORG-009",
+    description: "Multi-compartment organizer for desk supplies",
+    price: 599,
+    taxRate: 12,
+    stockQty: 34,
+    category: "Stationery",
+  },
+  {
+    name: "Consulting Hour",
+    sku: "SRV-CON-010",
+    description: "Professional consulting service",
+    price: 2500,
+    taxRate: 18,
+    stockQty: 99,
+    category: "Services",
+  },
+]
+
+export async function GET() {
+  const worksheet = XLSX.utils.json_to_sheet(SAMPLE_PRODUCTS)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Products")
+  const buffer = XLSX.write(workbook, {
+    bookType: "xlsx",
+    type: "buffer",
+  }) as Buffer
+
+  return new Response(new Uint8Array(buffer), {
+    headers: {
+      "Content-Disposition": 'attachment; filename="product-import-sample.xlsx"',
+      "Content-Type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+  })
+}
+
 export async function POST(request: Request) {
   try {
     await connectMongo()

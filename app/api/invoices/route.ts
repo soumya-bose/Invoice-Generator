@@ -6,8 +6,48 @@ import {
 } from "@/lib/inventory"
 import { connectMongo, MongoConfigurationError, toApiError } from "@/lib/mongodb"
 import { Invoice } from "@/models/Invoice"
+import { type NextRequest } from "next/server"
 
 export const runtime = "nodejs"
+
+export async function GET(request: NextRequest) {
+  try {
+    await connectMongo()
+
+    const page = Math.max(
+      1,
+      Number.parseInt(request.nextUrl.searchParams.get("page") || "1", 10) || 1
+    )
+    const pageSize = Math.min(
+      100,
+      Math.max(
+        1,
+        Number.parseInt(
+          request.nextUrl.searchParams.get("pageSize") || "50",
+          10
+        ) || 50
+      )
+    )
+
+    const [invoices, total] = await Promise.all([
+      Invoice.find({})
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize),
+      Invoice.countDocuments({}),
+    ])
+
+    return Response.json({
+      invoices: invoices.map(serializeInvoice),
+      total,
+      page,
+      pageSize,
+    })
+  } catch (error) {
+    const { body, status } = toApiError(error)
+    return Response.json(body, { status })
+  }
+}
 
 export async function POST(request: Request) {
   let reserved: Array<{ productId: string; qty: number }> = []
@@ -65,7 +105,10 @@ export async function POST(request: Request) {
       issueDate,
       dueDate: asString(body.dueDate),
       currency,
+      business: normalizeParty(body.business),
+      client: normalizeParty(body.client),
       items,
+      notes: asString(body.notes),
       subtotal: asNumber(body.subtotal),
       taxAmount: asNumber(body.taxAmount),
       total: asNumber(body.total),
@@ -74,9 +117,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         invoice: {
-          _id: String(invoice._id),
-          invoiceNumber: invoice.invoiceNumber,
-          createdAt: invoice.createdAt,
+          ...serializeInvoice(invoice),
         },
       },
       { status: 201 }
@@ -121,3 +162,54 @@ function asNumber(value: unknown) {
   return 0
 }
 
+function normalizeParty(value: unknown) {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {}
+
+  return {
+    name: asString(record.name),
+    email: asString(record.email),
+    address: asString(record.address),
+    city: asString(record.city),
+    state: asString(record.state),
+    zip: asString(record.zip),
+    phone: asString(record.phone),
+    gstNo: asString(record.gstNo),
+  }
+}
+
+function serializeInvoice(invoice: {
+  _id: unknown
+  invoiceNumber: string
+  clientName: string
+  issueDate: string
+  dueDate?: string
+  currency: string
+  business?: Record<string, unknown>
+  client?: Record<string, unknown>
+  items?: unknown[]
+  notes?: string
+  subtotal: number
+  taxAmount: number
+  total: number
+  createdAt?: Date
+}) {
+  return {
+    _id: String(invoice._id),
+    invoiceNumber: invoice.invoiceNumber,
+    clientName: invoice.clientName,
+    issueDate: invoice.issueDate,
+    dueDate: invoice.dueDate || "",
+    currency: invoice.currency,
+    business: invoice.business || {},
+    client: invoice.client || {},
+    items: invoice.items || [],
+    notes: invoice.notes || "",
+    subtotal: invoice.subtotal,
+    taxAmount: invoice.taxAmount,
+    total: invoice.total,
+    createdAt:
+      invoice.createdAt instanceof Date
+        ? invoice.createdAt.toISOString()
+        : undefined,
+  }
+}

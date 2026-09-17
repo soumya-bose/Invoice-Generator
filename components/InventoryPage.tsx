@@ -23,6 +23,11 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
 
 type Product = {
@@ -163,18 +168,17 @@ export function InventoryPage() {
     setError("")
   }, [])
 
-  const saveProduct = useCallback(async () => {
-    setSaving(true)
-    setError("")
-    setMessage("")
+  const persistProduct = useCallback(
+    async (productId: string | null, productForm: ProductForm) => {
+      setError("")
+      setMessage("")
 
-    try {
       const response = await fetch(
-        editingId ? `/api/products/${editingId}` : "/api/products",
+        productId ? `/api/products/${productId}` : "/api/products",
         {
-          method: editingId ? "PATCH" : "POST",
+          method: productId ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
+          body: JSON.stringify(productForm),
         }
       )
       const data = (await response.json().catch(() => null)) as {
@@ -202,9 +206,22 @@ export function InventoryPage() {
         }
         return [savedProduct, ...current]
       })
-      if (!editingId) setTotalProducts((current) => current + 1)
+      if (!productId) setTotalProducts((current) => current + 1)
+      setMessage(productId ? "Product updated" : "Product created")
+
+      return savedProduct
+    },
+    []
+  )
+
+  const saveProduct = useCallback(async () => {
+    setSaving(true)
+    setError("")
+    setMessage("")
+
+    try {
+      const savedProduct = await persistProduct(editingId, form)
       setEditingId(savedProduct._id)
-      setMessage(editingId ? "Product updated" : "Product created")
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -214,7 +231,7 @@ export function InventoryPage() {
     } finally {
       setSaving(false)
     }
-  }, [editingId, form])
+  }, [editingId, form, persistProduct])
 
   const updateStock = useCallback(
     async (product: Product, delta: number) => {
@@ -504,6 +521,9 @@ export function InventoryPage() {
                 <UploadIcon aria-hidden="true" />{" "}
                 {importing ? "Importing" : "Import"}
               </Button>
+              <a className="btn-import" href="/api/products/import" download>
+                Sample XLSX
+              </a>
               <Button
                 className="btn-import"
                 variant="outline"
@@ -624,15 +644,12 @@ export function InventoryPage() {
                           </div>
                         </td>
                         <td>
-                          <Button
-                            className="stock-step"
-                            size="icon-sm"
-                            variant="ghost"
-                            onClick={() => startEdit(product)}
-                            aria-label={`Edit ${product.name}`}
-                          >
-                            <PencilIcon aria-hidden="true" />
-                          </Button>
+                          <ProductEditPopover
+                            product={product}
+                            onSave={(nextForm) =>
+                              persistProduct(product._id, nextForm)
+                            }
+                          />
                         </td>
                       </tr>
                     ))
@@ -686,4 +703,177 @@ function formatMoney(value: number) {
     currency: "INR",
     maximumFractionDigits: 2,
   }).format(Number(value) || 0)
+}
+
+function ProductEditPopover({
+  onSave,
+  product,
+}: {
+  onSave: (form: ProductForm) => Promise<Product>
+  product: Product
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [draft, setDraft] = useState<ProductForm>(() => toProductForm(product))
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (open) {
+      setDraft(toProductForm(product))
+      setError("")
+    }
+  }, [open, product])
+
+  const setDraftField = useCallback(
+    <Key extends keyof ProductForm>(key: Key, value: ProductForm[Key]) => {
+      setDraft((current) => ({ ...current, [key]: value }))
+      setError("")
+    },
+    []
+  )
+
+  const saveDraft = useCallback(async () => {
+    setSaving(true)
+    setError("")
+
+    try {
+      await onSave(draft)
+      setOpen(false)
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save product"
+      )
+    } finally {
+      setSaving(false)
+    }
+  }, [draft, onSave])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="stock-step"
+        aria-label={`Edit ${product.name}`}
+      >
+        <PencilIcon aria-hidden="true" />
+      </PopoverTrigger>
+      <PopoverContent className="inventory-edit-popover" align="end">
+        <div className="panel-label">Edit product</div>
+        <div className="inventory-inline-form">
+          <label className="field full">
+            <span className="field-label">Name</span>
+            <Input
+              className="in"
+              value={draft.name}
+              onChange={(event) => setDraftField("name", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">SKU</span>
+            <Input
+              className="in"
+              value={draft.sku}
+              onChange={(event) => setDraftField("sku", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Category</span>
+            <Input
+              className="in"
+              value={draft.category}
+              onChange={(event) =>
+                setDraftField("category", event.target.value)
+              }
+            />
+          </label>
+          <label className="field full">
+            <span className="field-label">Description</span>
+            <Textarea
+              className="in ta"
+              rows={2}
+              value={draft.description}
+              onChange={(event) =>
+                setDraftField("description", event.target.value)
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Price</span>
+            <Input
+              className="in"
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.price}
+              onChange={(event) =>
+                setDraftField("price", Number(event.target.value))
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Tax %</span>
+            <Input
+              className="in"
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.taxRate}
+              onChange={(event) =>
+                setDraftField("taxRate", Number(event.target.value))
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Stock</span>
+            <Input
+              className="in"
+              type="number"
+              min="0"
+              step="1"
+              value={draft.stockQty}
+              onChange={(event) =>
+                setDraftField("stockQty", Number(event.target.value))
+              }
+            />
+          </label>
+        </div>
+        <div className="inventory-inline-actions">
+          <Button
+            className="btn-primary"
+            type="button"
+            onClick={saveDraft}
+            disabled={saving}
+          >
+            <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
+          </Button>
+          <Button
+            className="btn-import"
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+        {error && (
+          <div className="inventory-status is-error" role="alert">
+            {error}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function toProductForm(product: Product): ProductForm {
+  return {
+    name: product.name,
+    description: product.description,
+    sku: product.sku,
+    price: product.price,
+    taxRate: product.taxRate,
+    stockQty: product.stockQty,
+    category: product.category,
+  }
 }

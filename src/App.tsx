@@ -866,6 +866,8 @@ export default function App() {
           issueDate: meta.issueDate,
           dueDate: meta.dueDate,
           currency,
+          business,
+          client,
           items: state.items.map((item) => ({
             description: item.description,
             qty: item.qty,
@@ -875,16 +877,18 @@ export default function App() {
             taxMode: item.taxMode,
             productId: item.productId,
           })),
+          notes,
           subtotal: calc.subtotal,
           taxAmount: calc.taxAmount,
           total: calc.total,
         }),
       })
 
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; errors?: string[] }
+        | null
+
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string; errors?: string[] }
-          | null
         throw new Error(
           data?.error || data?.errors?.join(", ") || "Invoice creation failed"
         )
@@ -943,7 +947,18 @@ export default function App() {
     }, 4300)
 
     generationTimers.current = [printingTimer, completeTimer]
-  }, [calc, clearGenerationTimers, client.name, currency, meta, router, state])
+  }, [
+    calc,
+    business,
+    clearGenerationTimers,
+    client,
+    client.name,
+    currency,
+    meta,
+    notes,
+    router,
+    state,
+  ])
 
   const handleReplayReceipt = useCallback(() => {
     clearGenerationTimers()
@@ -1058,6 +1073,13 @@ export default function App() {
                   aria-label="Open inventory"
                 >
                   Inventory
+                </Link>
+                <Link
+                  className="btn-ghost"
+                  href="/saved-invoices"
+                  aria-label="Open saved invoices"
+                >
+                  Saved
                 </Link>
                 <Button
                   className="btn-ghost"
@@ -1554,6 +1576,13 @@ export default function App() {
                     <UploadIcon aria-hidden="true" />{" "}
                     {isImporting ? "Importing..." : "Import products"}
                   </Button>
+                  <a
+                    className="btn-import"
+                    href="/api/products/import"
+                    download
+                  >
+                    Sample XLSX
+                  </a>
                   {importSummary && (
                     <span className="import-status">
                       {importSummary.inserted} inserted,{" "}
@@ -1841,6 +1870,24 @@ export default function App() {
                       ))}
                     </div>
                     <div className="receipt-paper-rule" />
+                    <div className="receipt-line">
+                      <span>Subtotal</span>
+                      <strong>{formatMoney(calc.subtotal, currency)}</strong>
+                    </div>
+                    {calc.discountAmount > 0 && (
+                      <div className="receipt-line">
+                        <span>Discount</span>
+                        <strong>
+                          -{formatMoney(calc.discountAmount, currency)}
+                        </strong>
+                      </div>
+                    )}
+                    {calc.taxAmount > 0 && (
+                      <div className="receipt-line">
+                        <span>Tax</span>
+                        <strong>{formatMoney(calc.taxAmount, currency)}</strong>
+                      </div>
+                    )}
                     <div className="receipt-line receipt-total">
                       <span>Total paid</span>
                       <strong>{formatMoney(calc.total, currency)}</strong>
