@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react"
 import { EyeIcon, RefreshCcwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DashboardFrame } from "@/components/DashboardFrame"
 import { MobileNavigation } from "@/components/MobileNavigation"
 import { ThemeToggle } from "@/components/theme-provider"
 
@@ -184,132 +185,144 @@ export function SavedInvoicesPage() {
   const lastVisibleInvoice = Math.min(page * PAGE_SIZE, totalInvoices)
 
   return (
-    <div className="app">
-      <header className="header no-print">
-        <div className="header-inner">
-          <div className="header-left">
-            <Image
-              src="/images/receipt-printer-logo.svg"
-              alt=""
-              className="app-logo"
-              width={34}
-              height={34}
-              priority
-            />
-            <div>
-              <h1 className="header-title">Saved Invoices</h1>
-              <p className="header-sub">Generated invoice archive</p>
+    <DashboardFrame
+      title="Saved Invoices"
+      actions={
+        <Button className="btn-ghost" onClick={loadInvoices}>
+          <RefreshCcwIcon aria-hidden="true" /> Refresh
+        </Button>
+      }
+    >
+      <div className="app dashboard-route-app">
+        <header className="header no-print">
+          <div className="header-inner">
+            <div className="header-left">
+              <Image
+                src="/images/receipt-printer-logo.svg"
+                alt=""
+                className="app-logo"
+                width={34}
+                height={34}
+                priority
+              />
+              <div>
+                <h1 className="header-title">Saved Invoices</h1>
+                <p className="header-sub">Generated invoice archive</p>
+              </div>
             </div>
-          </div>
-          <div className="header-right">
-            <MobileNavigation />
-            <ThemeToggle />
-            <Link className="btn-ghost nav-link desktop-nav-link" href="/">
-              Invoice
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/inventory"
-            >
-              Inventory
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/saved-invoices"
-              aria-current="page"
-            >
-              Saved
-            </Link>
-            <Button className="btn-ghost" onClick={loadInvoices}>
-              <RefreshCcwIcon aria-hidden="true" /> Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="main saved-invoices-main">
-        <section className="panel saved-invoices-panel">
-          <div className="inventory-list-head">
-            <div>
-              <span className="inventory-kicker">Archive</span>
-              <h2>Past invoices</h2>
-            </div>
-            <span className="inventory-list-count">
-              {totalInvoices
-                ? `${firstVisibleInvoice}-${lastVisibleInvoice} of ${totalInvoices}`
-                : "0 saved"}
-            </span>
-          </div>
-
-          {error ? (
-            <div className="invoice-error saved-invoices-error">{error}</div>
-          ) : loading ? (
-            <div className="saved-invoices-empty">
-              Loading saved invoices...
-            </div>
-          ) : invoices.length ? (
-            <div className="saved-invoices-list">
-              {invoices.map((invoice) => (
-                <div className="saved-invoice" key={invoice._id}>
-                  <div>
-                    <strong>{invoice.invoiceNumber}</strong>
-                    <span>
-                      {invoice.clientName || "Client"} -{" "}
-                      {formatDateLabel(invoice.issueDate)}
-                    </span>
-                  </div>
-                  <b>
-                    {formatMoney(
-                      invoice.total,
-                      isCurrencyCode(invoice.currency)
-                        ? invoice.currency
-                        : DEFAULT_STATE.meta.currency
-                    )}
-                  </b>
-                  <Button
-                    className="btn-import"
-                    type="button"
-                    variant="outline"
-                    onClick={() => viewInvoice(invoice)}
-                  >
-                    <EyeIcon aria-hidden="true" /> View
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="saved-invoices-empty">
-              Generated invoices will appear here after they are saved.
-            </div>
-          )}
-          {totalPages > 1 && (
-            <nav className="inventory-pagination" aria-label="Invoice pages">
-              <Button
-                className="btn-ghost"
-                variant="outline"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page === 1 || loading}
+            <div className="header-right">
+              <MobileNavigation />
+              <ThemeToggle />
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/invoice/new"
               >
-                Previous
+                Invoice
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/inventory"
+              >
+                Inventory
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/saved-invoices"
+                aria-current="page"
+              >
+                Saved
+              </Link>
+              <Button className="btn-ghost" onClick={loadInvoices}>
+                <RefreshCcwIcon aria-hidden="true" /> Refresh
               </Button>
-              <span>
-                Page {page} of {totalPages}
+            </div>
+          </div>
+        </header>
+
+        <main className="main saved-invoices-main">
+          <section className="panel saved-invoices-panel">
+            <div className="inventory-list-head">
+              <div>
+                <span className="inventory-kicker">Archive</span>
+                <h2>Past invoices</h2>
+              </div>
+              <span className="inventory-list-count">
+                {totalInvoices
+                  ? `${firstVisibleInvoice}-${lastVisibleInvoice} of ${totalInvoices}`
+                  : "0 saved"}
               </span>
-              <Button
-                className="btn-ghost"
-                variant="outline"
-                onClick={() =>
-                  setPage((current) => Math.min(totalPages, current + 1))
-                }
-                disabled={page === totalPages || loading}
-              >
-                Next
-              </Button>
-            </nav>
-          )}
-        </section>
-      </main>
-    </div>
+            </div>
+
+            {error ? (
+              <div className="invoice-error saved-invoices-error">{error}</div>
+            ) : loading ? (
+              <div className="saved-invoices-empty">
+                Loading saved invoices...
+              </div>
+            ) : invoices.length ? (
+              <div className="saved-invoices-list">
+                {invoices.map((invoice) => (
+                  <div className="saved-invoice" key={invoice._id}>
+                    <div>
+                      <strong>{invoice.invoiceNumber}</strong>
+                      <span>
+                        {invoice.clientName || "Client"} -{" "}
+                        {formatDateLabel(invoice.issueDate)}
+                      </span>
+                    </div>
+                    <b>
+                      {formatMoney(
+                        invoice.total,
+                        isCurrencyCode(invoice.currency)
+                          ? invoice.currency
+                          : DEFAULT_STATE.meta.currency
+                      )}
+                    </b>
+                    <Button
+                      className="btn-import"
+                      type="button"
+                      variant="outline"
+                      onClick={() => viewInvoice(invoice)}
+                    >
+                      <EyeIcon aria-hidden="true" /> View
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="saved-invoices-empty">
+                Generated invoices will appear here after they are saved.
+              </div>
+            )}
+            {totalPages > 1 && (
+              <nav className="inventory-pagination" aria-label="Invoice pages">
+                <Button
+                  className="btn-ghost"
+                  variant="outline"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={page === 1 || loading}
+                >
+                  Previous
+                </Button>
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+                <Button
+                  className="btn-ghost"
+                  variant="outline"
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  disabled={page === totalPages || loading}
+                >
+                  Next
+                </Button>
+              </nav>
+            )}
+          </section>
+        </main>
+      </div>
+    </DashboardFrame>
   )
 }
 

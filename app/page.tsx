@@ -1,5 +1,5 @@
-import App from "@/src/App"
+import { DashboardPage } from "@/components/DashboardPage"
 
 export default function Page() {
-  return <App />
+  return <DashboardPage />
 }

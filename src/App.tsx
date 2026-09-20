@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { ReceiptPrinter } from "@/components/ReceiptPrinter"
+import { DashboardFrame } from "@/components/DashboardFrame"
 import { MobileNavigation } from "@/components/MobileNavigation"
 import { ThemeToggle } from "@/components/theme-provider"
 
@@ -1035,641 +1036,819 @@ export default function App() {
   const isPrinterRunning = receiptStage !== "complete"
 
   return (
-    <div className="app">
-      {/* Header */}
-      <header className="header no-print">
-        <div className="header-inner">
-          <div className="header-left">
-            <Image
-              src="/images/receipt-printer-logo.svg"
-              alt=""
-              className="app-logo"
-              width={34}
-              height={34}
-              priority
-            />
-            <div>
-              <h1 className="header-title">Invoice Generator</h1>
-              <p className="header-sub">
-                Create clean, professional invoices in seconds
-              </p>
+    <DashboardFrame
+      title="Invoice"
+      actions={
+        isInvoiceRoute ? (
+          <Button
+            className="btn-ghost"
+            onClick={handleEditInvoice}
+            aria-label="Edit invoice"
+          >
+            Edit
+          </Button>
+        ) : (
+          <>
+            <Button
+              className="btn-ghost"
+              onClick={loadSample}
+              aria-label="Load sample data"
+            >
+              Sample
+            </Button>
+            <Button
+              className="btn-ghost"
+              onClick={resetAll}
+              aria-label="Reset invoice"
+            >
+              Reset
+            </Button>
+          </>
+        )
+      }
+    >
+      <div className="app dashboard-route-app">
+        {/* Header */}
+        <header className="header no-print">
+          <div className="header-inner">
+            <div className="header-left">
+              <Image
+                src="/images/receipt-printer-logo.svg"
+                alt=""
+                className="app-logo"
+                width={34}
+                height={34}
+                priority
+              />
+              <div>
+                <h1 className="header-title">Invoice Generator</h1>
+                <p className="header-sub">
+                  Create clean, professional invoices in seconds
+                </p>
+              </div>
+            </div>
+            <div className="header-right">
+              <MobileNavigation />
+              <ThemeToggle />
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/invoice/new"
+                aria-current={
+                  isInvoiceRoute || pathname === "/invoice/new"
+                    ? "page"
+                    : undefined
+                }
+              >
+                Invoice
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/inventory"
+              >
+                Inventory
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/saved-invoices"
+              >
+                Saved
+              </Link>
+              {isInvoiceRoute ? (
+                <Button
+                  className="btn-ghost"
+                  onClick={handleEditInvoice}
+                  aria-label="Edit invoice"
+                >
+                  Edit
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    className="btn-ghost"
+                    onClick={loadSample}
+                    aria-label="Load sample data"
+                  >
+                    Sample
+                  </Button>
+                  <Button
+                    className="btn-ghost"
+                    onClick={resetAll}
+                    aria-label="Reset invoice"
+                  >
+                    Reset
+                  </Button>
+                </>
+              )}
             </div>
           </div>
-          <div className="header-right">
-            <MobileNavigation />
-            <ThemeToggle />
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/"
-              aria-current={
-                isInvoiceRoute || pathname === "/" ? "page" : undefined
-              }
-            >
-              Invoice
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/inventory"
-            >
-              Inventory
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/saved-invoices"
-            >
-              Saved
-            </Link>
-            {isInvoiceRoute ? (
-              <Button
-                className="btn-ghost"
-                onClick={handleEditInvoice}
-                aria-label="Edit invoice"
-              >
-                Edit
-              </Button>
-            ) : (
-              <>
-                <Button
-                  className="btn-ghost"
-                  onClick={loadSample}
-                  aria-label="Load sample data"
-                >
-                  Sample
-                </Button>
-                <Button
-                  className="btn-ghost"
-                  onClick={resetAll}
-                  aria-label="Reset invoice"
-                >
-                  Reset
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main */}
-      <main className="main">
-        <div className={isInvoiceRoute ? "invoice-view" : "form-view"}>
-          {/* Editor */}
-          {!isInvoiceRoute && (
-            <section className="editor no-print" aria-label="Invoice editor">
-              <Panel title="Your Business">
-                <div className="field-grid">
-                  <Field label="Business name" full>
-                    <Input
-                      className="in"
-                      value={business.name}
-                      onChange={(e) =>
-                        setField("business", "name", e.target.value)
-                      }
-                      placeholder="Acme Studio"
-                      aria-label="Business name"
-                    />
-                  </Field>
-                  <Field label="Email">
-                    <Input
-                      className="in"
-                      value={business.email}
-                      onChange={(e) =>
-                        setField("business", "email", e.target.value)
-                      }
-                      placeholder="hello@acme.com"
-                      aria-label="Business email"
-                    />
-                  </Field>
-                  <Field label="Phone">
-                    <Input
-                      className="in"
-                      value={business.phone}
-                      onChange={(e) =>
-                        setField("business", "phone", e.target.value)
-                      }
-                      placeholder="+1 555 000 0000"
-                      aria-label="Business phone"
-                    />
-                  </Field>
-                  <Field label="GST No.">
-                    <Input
-                      className="in"
-                      value={business.gstNo}
-                      onChange={(e) =>
-                        setField("business", "gstNo", e.target.value)
-                      }
-                      placeholder="29ABCDE1234F1Z5"
-                      aria-label="Business GST number"
-                    />
-                  </Field>
-                  <Field label="Address" full>
-                    <Input
-                      className="in"
-                      value={business.address}
-                      onChange={(e) =>
-                        setField("business", "address", e.target.value)
-                      }
-                      placeholder="123 Market St, Suite 4"
-                      aria-label="Business address"
-                    />
-                  </Field>
-                  <Field label="City">
-                    <Input
-                      className="in"
-                      value={business.city}
-                      onChange={(e) =>
-                        setField("business", "city", e.target.value)
-                      }
-                      placeholder="San Francisco"
-                      aria-label="Business city"
-                    />
-                  </Field>
-                  <Field label="State">
-                    <Input
-                      className="in"
-                      value={business.state}
-                      onChange={(e) =>
-                        setField("business", "state", e.target.value)
-                      }
-                      placeholder="CA"
-                      aria-label="Business state"
-                    />
-                  </Field>
-                  <Field label="ZIP">
-                    <Input
-                      className="in"
-                      value={business.zip}
-                      onChange={(e) =>
-                        setField("business", "zip", e.target.value)
-                      }
-                      placeholder="94103"
-                      aria-label="Business ZIP code"
-                    />
-                  </Field>
-                </div>
-              </Panel>
-
-              <Panel title="Bill To">
-                <div className="field-grid">
-                  <Field label="Client name" full>
-                    <Input
-                      className="in"
-                      value={client.name}
-                      onChange={(e) =>
-                        setField("client", "name", e.target.value)
-                      }
-                      placeholder="Jane Client"
-                      aria-label="Client name"
-                    />
-                  </Field>
-                  <Field label="Email" full>
-                    <Input
-                      className="in"
-                      value={client.email}
-                      onChange={(e) =>
-                        setField("client", "email", e.target.value)
-                      }
-                      placeholder="jane@company.com"
-                      aria-label="Client email"
-                    />
-                  </Field>
-                  <Field label="GST No." full>
-                    <Input
-                      className="in"
-                      value={client.gstNo}
-                      onChange={(e) =>
-                        setField("client", "gstNo", e.target.value)
-                      }
-                      placeholder="27AAACN0000A1Z5"
-                      aria-label="Client GST number"
-                    />
-                  </Field>
-                  <Field label="Address" full>
-                    <Input
-                      className="in"
-                      value={client.address}
-                      onChange={(e) =>
-                        setField("client", "address", e.target.value)
-                      }
-                      placeholder="456 Client Ave"
-                      aria-label="Client address"
-                    />
-                  </Field>
-                  <Field label="City">
-                    <Input
-                      className="in"
-                      value={client.city}
-                      onChange={(e) =>
-                        setField("client", "city", e.target.value)
-                      }
-                      placeholder="New York"
-                      aria-label="Client city"
-                    />
-                  </Field>
-                  <Field label="State">
-                    <Input
-                      className="in"
-                      value={client.state}
-                      onChange={(e) =>
-                        setField("client", "state", e.target.value)
-                      }
-                      placeholder="NY"
-                      aria-label="Client state"
-                    />
-                  </Field>
-                  <Field label="ZIP">
-                    <Input
-                      className="in"
-                      value={client.zip}
-                      onChange={(e) =>
-                        setField("client", "zip", e.target.value)
-                      }
-                      placeholder="10012"
-                      aria-label="Client ZIP code"
-                    />
-                  </Field>
-                </div>
-              </Panel>
-
-              <Panel title="Invoice Details">
-                <div className="field-grid">
-                  <Field label="Invoice #">
-                    <Input
-                      className="in"
-                      value={meta.number}
-                      onChange={(e) =>
-                        setField("meta", "number", e.target.value)
-                      }
-                      placeholder="INV-0001"
-                      aria-label="Invoice number"
-                    />
-                  </Field>
-                  <Field label="Currency">
-                    <Select
-                      value={meta.currency}
-                      onValueChange={(value) =>
-                        isCurrencyCode(value) &&
-                        setField("meta", "currency", value)
-                      }
-                    >
-                      <SelectTrigger
-                        className="select-trigger"
-                        aria-label="Currency"
-                      >
-                        <SelectValue>
-                          {(value) => {
-                            const selected =
-                              CURRENCIES.find((c) => c.code === value) ||
-                              currencyMeta
-
-                            return (
-                              <span className="currency-value">
-                                <span>{selected.code}</span>
-                                <span>{selected.symbol}</span>
-                              </span>
-                            )
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="select-menu" align="start">
-                        {CURRENCIES.map((c) => (
-                          <SelectItem
-                            className="select-menu-item"
-                            key={c.code}
-                            value={c.code}
-                          >
-                            <span className="currency-option">
-                              <span>{c.code}</span>
-                              <span>{c.name}</span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <Field label="Issue date">
-                    <DatePicker
-                      value={meta.issueDate}
-                      onChange={(value) => setField("meta", "issueDate", value)}
-                      ariaLabel="Issue date"
-                    />
-                  </Field>
-                  <Field label="Due date">
-                    <DatePicker
-                      value={meta.dueDate}
-                      onChange={(value) => setField("meta", "dueDate", value)}
-                      ariaLabel="Due date"
-                    />
-                  </Field>
-                </div>
-              </Panel>
-
-              <Panel title="Line Items">
-                <div className="items-editor">
-                  <div className="item-head">
-                    <span className="ih-desc">Description</span>
-                    <span className="ih-qty">Qty</span>
-                    <span className="ih-price">Price</span>
-                    <span className="ih-discount">Disc %</span>
-                    <span className="ih-tax">Tax %</span>
-                    <span className="ih-mode">Tax type</span>
-                    <span className="ih-amt">Amount</span>
-                    <span className="ih-del" />
+        {/* Main */}
+        <main className="main">
+          <div className={isInvoiceRoute ? "invoice-view" : "form-view"}>
+            {/* Editor */}
+            {!isInvoiceRoute && (
+              <section className="editor no-print" aria-label="Invoice editor">
+                <Panel title="Your Business">
+                  <div className="field-grid">
+                    <Field label="Business name" full>
+                      <Input
+                        className="in"
+                        value={business.name}
+                        onChange={(e) =>
+                          setField("business", "name", e.target.value)
+                        }
+                        placeholder="Acme Studio"
+                        aria-label="Business name"
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <Input
+                        className="in"
+                        value={business.email}
+                        onChange={(e) =>
+                          setField("business", "email", e.target.value)
+                        }
+                        placeholder="hello@acme.com"
+                        aria-label="Business email"
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <Input
+                        className="in"
+                        value={business.phone}
+                        onChange={(e) =>
+                          setField("business", "phone", e.target.value)
+                        }
+                        placeholder="+1 555 000 0000"
+                        aria-label="Business phone"
+                      />
+                    </Field>
+                    <Field label="GST No.">
+                      <Input
+                        className="in"
+                        value={business.gstNo}
+                        onChange={(e) =>
+                          setField("business", "gstNo", e.target.value)
+                        }
+                        placeholder="29ABCDE1234F1Z5"
+                        aria-label="Business GST number"
+                      />
+                    </Field>
+                    <Field label="Address" full>
+                      <Input
+                        className="in"
+                        value={business.address}
+                        onChange={(e) =>
+                          setField("business", "address", e.target.value)
+                        }
+                        placeholder="123 Market St, Suite 4"
+                        aria-label="Business address"
+                      />
+                    </Field>
+                    <Field label="City">
+                      <Input
+                        className="in"
+                        value={business.city}
+                        onChange={(e) =>
+                          setField("business", "city", e.target.value)
+                        }
+                        placeholder="San Francisco"
+                        aria-label="Business city"
+                      />
+                    </Field>
+                    <Field label="State">
+                      <Input
+                        className="in"
+                        value={business.state}
+                        onChange={(e) =>
+                          setField("business", "state", e.target.value)
+                        }
+                        placeholder="CA"
+                        aria-label="Business state"
+                      />
+                    </Field>
+                    <Field label="ZIP">
+                      <Input
+                        className="in"
+                        value={business.zip}
+                        onChange={(e) =>
+                          setField("business", "zip", e.target.value)
+                        }
+                        placeholder="94103"
+                        aria-label="Business ZIP code"
+                      />
+                    </Field>
                   </div>
-                  {items.map((it) => {
-                    const line = calc.lines.find((entry) => entry.id === it.id)
-                    const isSearchingThisItem =
-                      productSearch.activeItemId === it.id
-                    const hasStockLimit = typeof it.productStockQty === "number"
-                    return (
-                      <div className="item-row" key={it.id}>
-                        <div className="product-picker">
-                          <Input
-                            className="in item-desc"
-                            value={it.description}
-                            onChange={(e) =>
-                              updateItemDescription(it.id, e.target.value)
-                            }
-                            onFocus={() =>
-                              setProductSearch((current) => ({
-                                ...current,
-                                activeItemId: it.id,
-                                loading: false,
-                                products:
-                                  it.description.trim().length < 2
-                                    ? []
-                                    : current.products,
-                                query: it.description,
-                              }))
-                            }
-                            onBlur={() => {
-                              window.setTimeout(() => {
-                                setProductSearch((current) =>
-                                  current.activeItemId === it.id
-                                    ? {
-                                        activeItemId: null,
-                                        loading: false,
-                                        products: [],
-                                        query: "",
-                                      }
-                                    : current
-                                )
-                              }, 120)
+                </Panel>
+
+                <Panel title="Bill To">
+                  <div className="field-grid">
+                    <Field label="Client name" full>
+                      <Input
+                        className="in"
+                        value={client.name}
+                        onChange={(e) =>
+                          setField("client", "name", e.target.value)
+                        }
+                        placeholder="Jane Client"
+                        aria-label="Client name"
+                      />
+                    </Field>
+                    <Field label="Email" full>
+                      <Input
+                        className="in"
+                        value={client.email}
+                        onChange={(e) =>
+                          setField("client", "email", e.target.value)
+                        }
+                        placeholder="jane@company.com"
+                        aria-label="Client email"
+                      />
+                    </Field>
+                    <Field label="GST No." full>
+                      <Input
+                        className="in"
+                        value={client.gstNo}
+                        onChange={(e) =>
+                          setField("client", "gstNo", e.target.value)
+                        }
+                        placeholder="27AAACN0000A1Z5"
+                        aria-label="Client GST number"
+                      />
+                    </Field>
+                    <Field label="Address" full>
+                      <Input
+                        className="in"
+                        value={client.address}
+                        onChange={(e) =>
+                          setField("client", "address", e.target.value)
+                        }
+                        placeholder="456 Client Ave"
+                        aria-label="Client address"
+                      />
+                    </Field>
+                    <Field label="City">
+                      <Input
+                        className="in"
+                        value={client.city}
+                        onChange={(e) =>
+                          setField("client", "city", e.target.value)
+                        }
+                        placeholder="New York"
+                        aria-label="Client city"
+                      />
+                    </Field>
+                    <Field label="State">
+                      <Input
+                        className="in"
+                        value={client.state}
+                        onChange={(e) =>
+                          setField("client", "state", e.target.value)
+                        }
+                        placeholder="NY"
+                        aria-label="Client state"
+                      />
+                    </Field>
+                    <Field label="ZIP">
+                      <Input
+                        className="in"
+                        value={client.zip}
+                        onChange={(e) =>
+                          setField("client", "zip", e.target.value)
+                        }
+                        placeholder="10012"
+                        aria-label="Client ZIP code"
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <Panel title="Invoice Details">
+                  <div className="field-grid">
+                    <Field label="Invoice #">
+                      <Input
+                        className="in"
+                        value={meta.number}
+                        onChange={(e) =>
+                          setField("meta", "number", e.target.value)
+                        }
+                        placeholder="INV-0001"
+                        aria-label="Invoice number"
+                      />
+                    </Field>
+                    <Field label="Currency">
+                      <Select
+                        value={meta.currency}
+                        onValueChange={(value) =>
+                          isCurrencyCode(value) &&
+                          setField("meta", "currency", value)
+                        }
+                      >
+                        <SelectTrigger
+                          className="select-trigger"
+                          aria-label="Currency"
+                        >
+                          <SelectValue>
+                            {(value) => {
+                              const selected =
+                                CURRENCIES.find((c) => c.code === value) ||
+                                currencyMeta
+
+                              return (
+                                <span className="currency-value">
+                                  <span>{selected.code}</span>
+                                  <span>{selected.symbol}</span>
+                                </span>
+                              )
                             }}
-                            placeholder="Search products or type manually"
-                            aria-label="Item description"
-                            autoComplete="off"
-                          />
-                          {hasStockLimit && (
-                            <div className="stock-hint">
-                              <span>SKU {it.productSku}</span>
-                              <strong>{it.productStockQty} available</strong>
-                            </div>
-                          )}
-                          {isSearchingThisItem &&
-                            (productSearch.products.length > 0 ||
-                              productSearch.loading) && (
-                              <div className="product-suggestions">
-                                {productSearch.loading ? (
-                                  <div className="product-suggestion is-muted">
-                                    Searching products...
-                                  </div>
-                                ) : (
-                                  productSearch.products.map((product) => (
-                                    <button
-                                      className="product-suggestion"
-                                      key={product._id}
-                                      type="button"
-                                      onMouseDown={(event) =>
-                                        event.preventDefault()
-                                      }
-                                      onClick={() =>
-                                        selectProduct(it.id, product)
-                                      }
-                                    >
-                                      <span>
-                                        <strong>{product.name}</strong>
-                                        <small>
-                                          {product.sku}
-                                          {product.category
-                                            ? ` - ${product.category}`
-                                            : ""}
-                                        </small>
-                                      </span>
-                                      <em>{product.stockQty} in stock</em>
-                                    </button>
-                                  ))
-                                )}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="select-menu" align="start">
+                          {CURRENCIES.map((c) => (
+                            <SelectItem
+                              className="select-menu-item"
+                              key={c.code}
+                              value={c.code}
+                            >
+                              <span className="currency-option">
+                                <span>{c.code}</span>
+                                <span>{c.name}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Issue date">
+                      <DatePicker
+                        value={meta.issueDate}
+                        onChange={(value) =>
+                          setField("meta", "issueDate", value)
+                        }
+                        ariaLabel="Issue date"
+                      />
+                    </Field>
+                    <Field label="Due date">
+                      <DatePicker
+                        value={meta.dueDate}
+                        onChange={(value) => setField("meta", "dueDate", value)}
+                        ariaLabel="Due date"
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <Panel title="Line Items">
+                  <div className="items-editor">
+                    <div className="item-head">
+                      <span className="ih-desc">Description</span>
+                      <span className="ih-qty">Qty</span>
+                      <span className="ih-price">Price</span>
+                      <span className="ih-discount">Disc %</span>
+                      <span className="ih-tax">Tax %</span>
+                      <span className="ih-mode">Tax type</span>
+                      <span className="ih-amt">Amount</span>
+                      <span className="ih-del" />
+                    </div>
+                    {items.map((it) => {
+                      const line = calc.lines.find(
+                        (entry) => entry.id === it.id
+                      )
+                      const isSearchingThisItem =
+                        productSearch.activeItemId === it.id
+                      const hasStockLimit =
+                        typeof it.productStockQty === "number"
+                      return (
+                        <div className="item-row" key={it.id}>
+                          <div className="product-picker">
+                            <Input
+                              className="in item-desc"
+                              value={it.description}
+                              onChange={(e) =>
+                                updateItemDescription(it.id, e.target.value)
+                              }
+                              onFocus={() =>
+                                setProductSearch((current) => ({
+                                  ...current,
+                                  activeItemId: it.id,
+                                  loading: false,
+                                  products:
+                                    it.description.trim().length < 2
+                                      ? []
+                                      : current.products,
+                                  query: it.description,
+                                }))
+                              }
+                              onBlur={() => {
+                                window.setTimeout(() => {
+                                  setProductSearch((current) =>
+                                    current.activeItemId === it.id
+                                      ? {
+                                          activeItemId: null,
+                                          loading: false,
+                                          products: [],
+                                          query: "",
+                                        }
+                                      : current
+                                  )
+                                }, 120)
+                              }}
+                              placeholder="Search products or type manually"
+                              aria-label="Item description"
+                              autoComplete="off"
+                            />
+                            {hasStockLimit && (
+                              <div className="stock-hint">
+                                <span>SKU {it.productSku}</span>
+                                <strong>{it.productStockQty} available</strong>
                               </div>
                             )}
-                        </div>
-                        <div className="item-control item-qty">
-                          <span>Qty</span>
-                          <Input
-                            className="in item-num"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={it.qty}
-                            onChange={(e) =>
-                              updateItemQty(
-                                it.id,
-                                e.target.value === ""
-                                  ? 0
-                                  : Number(e.target.value)
-                              )
-                            }
-                            aria-label="Quantity"
-                          />
-                        </div>
-                        <div className="item-control item-price">
-                          <span>Price</span>
-                          <Input
-                            className="in item-num"
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={it.price}
-                            onChange={(e) =>
-                              updateItem(
-                                it.id,
-                                "price",
-                                e.target.value === ""
-                                  ? 0
-                                  : Number(e.target.value)
-                              )
-                            }
-                            aria-label="Unit price"
-                          />
-                        </div>
-                        <div className="item-control item-discount">
-                          <span>Disc</span>
-                          <Input
-                            className="in item-num"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.01"
-                            value={it.discount}
-                            onChange={(e) =>
-                              updateItem(
-                                it.id,
-                                "discount",
-                                e.target.value === ""
-                                  ? 0
-                                  : Number(e.target.value)
-                              )
-                            }
-                            aria-label="Discount percent"
-                          />
-                        </div>
-                        <div className="item-control item-tax">
-                          <span>Tax</span>
-                          <RateDropdown
-                            label="Tax"
-                            value={it.taxRate}
-                            options={TAX_OPTIONS}
+                            {isSearchingThisItem &&
+                              (productSearch.products.length > 0 ||
+                                productSearch.loading) && (
+                                <div className="product-suggestions">
+                                  {productSearch.loading ? (
+                                    <div className="product-suggestion is-muted">
+                                      Searching products...
+                                    </div>
+                                  ) : (
+                                    productSearch.products.map((product) => (
+                                      <button
+                                        className="product-suggestion"
+                                        key={product._id}
+                                        type="button"
+                                        onMouseDown={(event) =>
+                                          event.preventDefault()
+                                        }
+                                        onClick={() =>
+                                          selectProduct(it.id, product)
+                                        }
+                                      >
+                                        <span>
+                                          <strong>{product.name}</strong>
+                                          <small>
+                                            {product.sku}
+                                            {product.category
+                                              ? ` - ${product.category}`
+                                              : ""}
+                                          </small>
+                                        </span>
+                                        <em>{product.stockQty} in stock</em>
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              )}
+                          </div>
+                          <div className="item-control item-qty">
+                            <span>Qty</span>
+                            <Input
+                              className="in item-num"
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={it.qty}
+                              onChange={(e) =>
+                                updateItemQty(
+                                  it.id,
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value)
+                                )
+                              }
+                              aria-label="Quantity"
+                            />
+                          </div>
+                          <div className="item-control item-price">
+                            <span>Price</span>
+                            <Input
+                              className="in item-num"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={it.price}
+                              onChange={(e) =>
+                                updateItem(
+                                  it.id,
+                                  "price",
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value)
+                                )
+                              }
+                              aria-label="Unit price"
+                            />
+                          </div>
+                          <div className="item-control item-discount">
+                            <span>Disc</span>
+                            <Input
+                              className="in item-num"
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              value={it.discount}
+                              onChange={(e) =>
+                                updateItem(
+                                  it.id,
+                                  "discount",
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value)
+                                )
+                              }
+                              aria-label="Discount percent"
+                            />
+                          </div>
+                          <div className="item-control item-tax">
+                            <span>Tax</span>
+                            <RateDropdown
+                              label="Tax"
+                              value={it.taxRate}
+                              options={TAX_OPTIONS}
+                              onChange={(value) =>
+                                updateItem(it.id, "taxRate", value)
+                              }
+                            />
+                          </div>
+                          <TaxModeDropdown
+                            value={it.taxMode || "exclusive"}
                             onChange={(value) =>
-                              updateItem(it.id, "taxRate", value)
+                              updateItem(it.id, "taxMode", value)
                             }
                           />
+                          <div className="item-total">
+                            <span>
+                              {formatMoney(line?.total ?? 0, currency)}
+                            </span>
+                            <Button
+                              className="del-btn"
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeItem(it.id)}
+                              disabled={items.length <= 1}
+                              aria-label="Remove item"
+                            >
+                              <IconTrash />
+                            </Button>
+                          </div>
                         </div>
-                        <TaxModeDropdown
-                          value={it.taxMode || "exclusive"}
-                          onChange={(value) =>
-                            updateItem(it.id, "taxMode", value)
-                          }
-                        />
-                        <div className="item-total">
-                          <span>{formatMoney(line?.total ?? 0, currency)}</span>
-                          <Button
-                            className="del-btn"
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeItem(it.id)}
-                            disabled={items.length <= 1}
-                            aria-label="Remove item"
-                          >
-                            <IconTrash />
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-                <Button
-                  className="btn-add"
-                  variant="outline"
-                  onClick={addItem}
-                  aria-label="Add line item"
-                >
-                  <IconPlus /> Add item
-                </Button>
-                <div className="import-strip">
-                  <input
-                    ref={importInputRef}
-                    className="sr-only"
-                    type="file"
-                    accept=".csv,.xls,.xlsx"
-                    onChange={handleProductImport}
-                    aria-label="Import products"
-                  />
+                      )
+                    })}
+                  </div>
                   <Button
-                    className="btn-import"
-                    type="button"
+                    className="btn-add"
                     variant="outline"
-                    onClick={() => importInputRef.current?.click()}
-                    disabled={isImporting}
+                    onClick={addItem}
+                    aria-label="Add line item"
                   >
-                    <UploadIcon aria-hidden="true" />{" "}
-                    {isImporting ? "Importing..." : "Import products"}
+                    <IconPlus /> Add item
                   </Button>
-                  <a
-                    className="btn-import"
-                    href="/api/products/import"
-                    download
-                  >
-                    Sample XLSX
-                  </a>
-                  {importSummary && (
-                    <span className="import-status">
-                      {importSummary.inserted} inserted, {importSummary.updated}{" "}
-                      updated, {importSummary.failed} failed
-                    </span>
-                  )}
-                  {importError && (
-                    <span className="import-status is-error">
-                      {importError}
-                    </span>
-                  )}
-                </div>
-              </Panel>
-
-              <Panel title="Totals & Notes">
-                <div className="totals-card" aria-label="Invoice totals">
-                  <div>
-                    <span>Subtotal</span>
-                    <strong>{formatMoney(calc.subtotal, currency)}</strong>
-                  </div>
-                  <div>
-                    <span>Line discounts</span>
-                    <strong>
-                      -{formatMoney(calc.discountAmount, currency)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Tax</span>
-                    <strong>{formatMoney(calc.taxAmount, currency)}</strong>
-                  </div>
-                  <div className="totals-grand">
-                    <span>Total</span>
-                    <strong>{formatMoney(calc.total, currency)}</strong>
-                  </div>
-                </div>
-                <div className="field-grid">
-                  <Field label="Notes" full>
-                    <Textarea
-                      className="in ta"
-                      rows={2}
-                      value={notes}
-                      onChange={(e) => setTop("notes", e.target.value)}
-                      placeholder="Payment terms, thank-you note..."
-                      aria-label="Notes"
+                  <div className="import-strip">
+                    <input
+                      ref={importInputRef}
+                      className="sr-only"
+                      type="file"
+                      accept=".csv,.xls,.xlsx"
+                      onChange={handleProductImport}
+                      aria-label="Import products"
                     />
-                  </Field>
+                    <Button
+                      className="btn-import"
+                      type="button"
+                      variant="outline"
+                      onClick={() => importInputRef.current?.click()}
+                      disabled={isImporting}
+                    >
+                      <UploadIcon aria-hidden="true" />{" "}
+                      {isImporting ? "Importing..." : "Import products"}
+                    </Button>
+                    <a
+                      className="btn-import"
+                      href="/api/products/import"
+                      download
+                    >
+                      Sample XLSX
+                    </a>
+                    {importSummary && (
+                      <span className="import-status">
+                        {importSummary.inserted} inserted,{" "}
+                        {importSummary.updated} updated, {importSummary.failed}{" "}
+                        failed
+                      </span>
+                    )}
+                    {importError && (
+                      <span className="import-status is-error">
+                        {importError}
+                      </span>
+                    )}
+                  </div>
+                </Panel>
+
+                <Panel title="Totals & Notes">
+                  <div className="totals-card" aria-label="Invoice totals">
+                    <div>
+                      <span>Subtotal</span>
+                      <strong>{formatMoney(calc.subtotal, currency)}</strong>
+                    </div>
+                    <div>
+                      <span>Line discounts</span>
+                      <strong>
+                        -{formatMoney(calc.discountAmount, currency)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Tax</span>
+                      <strong>{formatMoney(calc.taxAmount, currency)}</strong>
+                    </div>
+                    <div className="totals-grand">
+                      <span>Total</span>
+                      <strong>{formatMoney(calc.total, currency)}</strong>
+                    </div>
+                  </div>
+                  <div className="field-grid">
+                    <Field label="Notes" full>
+                      <Textarea
+                        className="in ta"
+                        rows={2}
+                        value={notes}
+                        onChange={(e) => setTop("notes", e.target.value)}
+                        placeholder="Payment terms, thank-you note..."
+                        aria-label="Notes"
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <div className="generate-actions">
+                  <Button
+                    className="btn-primary btn-generate"
+                    onClick={handleGenerateInvoice}
+                    disabled={isGenerating || isSavingInvoice}
+                    aria-label="Generate invoice"
+                  >
+                    <IconReceipt />{" "}
+                    {isGenerating || isSavingInvoice
+                      ? "Generating..."
+                      : "Generate Invoice"}
+                  </Button>
                 </div>
-              </Panel>
+                {invoiceError && (
+                  <p className="invoice-error" role="alert">
+                    {invoiceError}
+                  </p>
+                )}
+              </section>
+            )}
 
-              <div className="generate-actions">
-                <Button
-                  className="btn-primary btn-generate"
-                  onClick={handleGenerateInvoice}
-                  disabled={isGenerating || isSavingInvoice}
-                  aria-label="Generate invoice"
-                >
-                  <IconReceipt />{" "}
-                  {isGenerating || isSavingInvoice
-                    ? "Generating..."
-                    : "Generate Invoice"}
-                </Button>
-              </div>
-              {invoiceError && (
-                <p className="invoice-error" role="alert">
-                  {invoiceError}
-                </p>
-              )}
-            </section>
-          )}
+            {/* Preview */}
+            {!isInvoiceRoute && showReceiptPrinter && (
+              <section
+                className="generation-overlay"
+                aria-label="Generating invoice"
+              >
+                {showReceiptPrinter && (
+                  <ReceiptPrinter.Root
+                    stage={receiptStage}
+                    className="checkout-printer"
+                  >
+                    <ReceiptPrinter.Machine>
+                      <ReceiptPrinter.Header>
+                        <div className="receipt-logo" aria-hidden="true">
+                          <Image
+                            src="/images/receipt-printer-logo.svg"
+                            alt=""
+                            width={34}
+                            height={34}
+                          />
+                        </div>
+                        <Button
+                          className="receipt-home"
+                          type="button"
+                          variant="ghost"
+                          onClick={() => router.push("/")}
+                        >
+                          <IconHome /> Home
+                        </Button>
+                      </ReceiptPrinter.Header>
 
-          {/* Preview */}
-          {!isInvoiceRoute && showReceiptPrinter && (
-            <section
-              className="generation-overlay"
-              aria-label="Generating invoice"
-            >
-              {showReceiptPrinter && (
+                      <ReceiptPrinter.Screen>
+                        <div className="receipt-screen-row">
+                          <div>
+                            <p>{items[0]?.description || "Invoice"}</p>
+                            <span>{client.name || "Generated invoice"}</span>
+                          </div>
+                          <span className="receipt-screen-total-label">
+                            Total
+                          </span>
+                          <strong>{formatMoney(calc.total, currency)}</strong>
+                        </div>
+                        <ReceiptPrinter.Status />
+                      </ReceiptPrinter.Screen>
+                    </ReceiptPrinter.Machine>
+
+                    <ReceiptPrinter.Output>
+                      <ReceiptPrinter.Paper>
+                        <div className="receipt-paper-logo" aria-hidden="true">
+                          <Image
+                            src="/images/receipt-printer-logo.svg"
+                            alt=""
+                            width={40}
+                            height={40}
+                          />
+                        </div>
+                        <div className="receipt-paper-title">
+                          {items[0]?.description || "Invoice"}
+                        </div>
+                        <div className="receipt-paper-meta">
+                          <span>{meta.number || "Invoice"}</span>
+                          <span>{formatDateLabel(meta.issueDate)}</span>
+                        </div>
+                        <div className="receipt-paper-rule" />
+                        <div className="receipt-paper-parties">
+                          <span>Paid to</span>
+                          <strong>{business.name || "Your Business"}</strong>
+                          <span>Paid by</span>
+                          <strong>{client.name || "Client name"}</strong>
+                        </div>
+                        <div className="receipt-paper-items">
+                          {items.map((it) => (
+                            <div className="receipt-line" key={it.id}>
+                              <span>
+                                {it.description || "Item description"}
+                              </span>
+                              <strong>
+                                {formatMoney(
+                                  calc.lines.find((line) => line.id === it.id)
+                                    ?.total ?? 0,
+                                  currency
+                                )}
+                              </strong>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="receipt-paper-rule" />
+                        <div className="receipt-line">
+                          <span>Subtotal</span>
+                          <strong>
+                            {formatMoney(calc.subtotal, currency)}
+                          </strong>
+                        </div>
+                        {calc.discountAmount > 0 && (
+                          <div className="receipt-line">
+                            <span>Discount</span>
+                            <strong>
+                              -{formatMoney(calc.discountAmount, currency)}
+                            </strong>
+                          </div>
+                        )}
+                        {calc.taxAmount > 0 && (
+                          <div className="receipt-line">
+                            <span>Tax</span>
+                            <strong>
+                              {formatMoney(calc.taxAmount, currency)}
+                            </strong>
+                          </div>
+                        )}
+                        <div className="receipt-line receipt-total">
+                          <span>Total paid</span>
+                          <strong>{formatMoney(calc.total, currency)}</strong>
+                        </div>
+                        <div className="receipt-paper-rule" />
+                        <div className="receipt-transaction">
+                          <div>
+                            <span>Order</span>
+                            <strong>{meta.number || "INV-0001"}</strong>
+                          </div>
+                          <div>
+                            <span>Date</span>
+                            <strong>{formatDateLabel(meta.issueDate)}</strong>
+                          </div>
+                        </div>
+                        <div className="receipt-barcode" aria-hidden="true">
+                          {Array.from({ length: 52 }, (_, index) => (
+                            <span key={index} />
+                          ))}
+                        </div>
+                        <p className="receipt-thanks">
+                          Thanks for your business.
+                        </p>
+                      </ReceiptPrinter.Paper>
+                    </ReceiptPrinter.Output>
+                  </ReceiptPrinter.Root>
+                )}
+              </section>
+            )}
+
+            {isInvoiceRoute && (
+              <section
+                className="preview-wrap is-ready"
+                aria-label="Generated invoice"
+              >
                 <ReceiptPrinter.Root
                   stage={receiptStage}
-                  className="checkout-printer"
+                  className="checkout-printer generated-printer no-print"
                 >
                   <ReceiptPrinter.Machine>
                     <ReceiptPrinter.Header>
@@ -1685,7 +1864,7 @@ export default function App() {
                         className="receipt-home"
                         type="button"
                         variant="ghost"
-                        onClick={() => router.push("/")}
+                        onClick={handleEditInvoice}
                       >
                         <IconHome /> Home
                       </Button>
@@ -1791,171 +1970,45 @@ export default function App() {
                     </ReceiptPrinter.Paper>
                   </ReceiptPrinter.Output>
                 </ReceiptPrinter.Root>
-              )}
-            </section>
-          )}
 
-          {isInvoiceRoute && (
-            <section
-              className="preview-wrap is-ready"
-              aria-label="Generated invoice"
-            >
-              <ReceiptPrinter.Root
-                stage={receiptStage}
-                className="checkout-printer generated-printer no-print"
-              >
-                <ReceiptPrinter.Machine>
-                  <ReceiptPrinter.Header>
-                    <div className="receipt-logo" aria-hidden="true">
-                      <Image
-                        src="/images/receipt-printer-logo.svg"
-                        alt=""
-                        width={34}
-                        height={34}
-                      />
-                    </div>
+                <div className="invoice-result">
+                  <div className="invoice-result-actions no-print">
                     <Button
-                      className="receipt-home"
-                      type="button"
+                      className="btn-ghost btn-replay"
                       variant="ghost"
-                      onClick={handleEditInvoice}
+                      onClick={handleReplayReceipt}
+                      disabled={isPrinterRunning}
+                      aria-label="Replay receipt generation"
                     >
-                      <IconHome /> Home
+                      <IconReplay /> {isPrinterRunning ? "Replaying" : "Replay"}
                     </Button>
-                  </ReceiptPrinter.Header>
+                    <Button
+                      className="btn-primary btn-download"
+                      onClick={handlePrint}
+                      aria-label="Download invoice as PDF"
+                    >
+                      <IconDownload /> Download PDF
+                    </Button>
+                  </div>
 
-                  <ReceiptPrinter.Screen>
-                    <div className="receipt-screen-row">
-                      <div>
-                        <p>{items[0]?.description || "Invoice"}</p>
-                        <span>{client.name || "Generated invoice"}</span>
-                      </div>
-                      <span className="receipt-screen-total-label">Total</span>
-                      <strong>{formatMoney(calc.total, currency)}</strong>
-                    </div>
-                    <ReceiptPrinter.Status />
-                  </ReceiptPrinter.Screen>
-                </ReceiptPrinter.Machine>
-
-                <ReceiptPrinter.Output>
-                  <ReceiptPrinter.Paper>
-                    <div className="receipt-paper-logo" aria-hidden="true">
-                      <Image
-                        src="/images/receipt-printer-logo.svg"
-                        alt=""
-                        width={40}
-                        height={40}
-                      />
-                    </div>
-                    <div className="receipt-paper-title">
-                      {items[0]?.description || "Invoice"}
-                    </div>
-                    <div className="receipt-paper-meta">
-                      <span>{meta.number || "Invoice"}</span>
-                      <span>{formatDateLabel(meta.issueDate)}</span>
-                    </div>
-                    <div className="receipt-paper-rule" />
-                    <div className="receipt-paper-parties">
-                      <span>Paid to</span>
-                      <strong>{business.name || "Your Business"}</strong>
-                      <span>Paid by</span>
-                      <strong>{client.name || "Client name"}</strong>
-                    </div>
-                    <div className="receipt-paper-items">
-                      {items.map((it) => (
-                        <div className="receipt-line" key={it.id}>
-                          <span>{it.description || "Item description"}</span>
-                          <strong>
-                            {formatMoney(
-                              calc.lines.find((line) => line.id === it.id)
-                                ?.total ?? 0,
-                              currency
-                            )}
-                          </strong>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="receipt-paper-rule" />
-                    <div className="receipt-line">
-                      <span>Subtotal</span>
-                      <strong>{formatMoney(calc.subtotal, currency)}</strong>
-                    </div>
-                    {calc.discountAmount > 0 && (
-                      <div className="receipt-line">
-                        <span>Discount</span>
-                        <strong>
-                          -{formatMoney(calc.discountAmount, currency)}
-                        </strong>
-                      </div>
-                    )}
-                    {calc.taxAmount > 0 && (
-                      <div className="receipt-line">
-                        <span>Tax</span>
-                        <strong>{formatMoney(calc.taxAmount, currency)}</strong>
-                      </div>
-                    )}
-                    <div className="receipt-line receipt-total">
-                      <span>Total paid</span>
-                      <strong>{formatMoney(calc.total, currency)}</strong>
-                    </div>
-                    <div className="receipt-paper-rule" />
-                    <div className="receipt-transaction">
-                      <div>
-                        <span>Order</span>
-                        <strong>{meta.number || "INV-0001"}</strong>
-                      </div>
-                      <div>
-                        <span>Date</span>
-                        <strong>{formatDateLabel(meta.issueDate)}</strong>
-                      </div>
-                    </div>
-                    <div className="receipt-barcode" aria-hidden="true">
-                      {Array.from({ length: 52 }, (_, index) => (
-                        <span key={index} />
-                      ))}
-                    </div>
-                    <p className="receipt-thanks">Thanks for your business.</p>
-                  </ReceiptPrinter.Paper>
-                </ReceiptPrinter.Output>
-              </ReceiptPrinter.Root>
-
-              <div className="invoice-result">
-                <div className="invoice-result-actions no-print">
-                  <Button
-                    className="btn-ghost btn-replay"
-                    variant="ghost"
-                    onClick={handleReplayReceipt}
-                    disabled={isPrinterRunning}
-                    aria-label="Replay receipt generation"
-                  >
-                    <IconReplay /> {isPrinterRunning ? "Replaying" : "Replay"}
-                  </Button>
-                  <Button
-                    className="btn-primary btn-download"
-                    onClick={handlePrint}
-                    aria-label="Download invoice as PDF"
-                  >
-                    <IconDownload /> Download PDF
-                  </Button>
+                  <TaxInvoiceDocument
+                    business={business}
+                    calc={calc}
+                    client={client}
+                    formatMoney={(value) => formatMoney(value, currency)}
+                    items={items}
+                    meta={meta}
+                    notes={notes}
+                  />
                 </div>
+              </section>
+            )}
+          </div>
+        </main>
 
-                <TaxInvoiceDocument
-                  business={business}
-                  calc={calc}
-                  client={client}
-                  formatMoney={(value) => formatMoney(value, currency)}
-                  items={items}
-                  meta={meta}
-                  notes={notes}
-                />
-              </div>
-            </section>
-          )}
-        </div>
-      </main>
-
-      <footer className="credit no-print">Coded by Soumya</footer>
-    </div>
+        <footer className="credit no-print">Coded by Soumya</footer>
+      </div>
+    </DashboardFrame>
   )
 }
 

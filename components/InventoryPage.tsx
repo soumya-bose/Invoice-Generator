@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DashboardFrame } from "@/components/DashboardFrame"
 import { MobileNavigation } from "@/components/MobileNavigation"
 import { ThemeToggle } from "@/components/theme-provider"
 import { Input } from "@/components/ui/input"
@@ -357,360 +358,386 @@ export function InventoryPage() {
   }, [loadProducts])
 
   return (
-    <div className="app">
-      <header className="header no-print">
-        <div className="header-inner">
-          <div className="header-left">
-            <Image
-              src="/images/receipt-printer-logo.svg"
-              alt=""
-              className="app-logo"
-              width={34}
-              height={34}
-              priority
-            />
-            <div>
-              <h1 className="header-title">Inventory</h1>
-              <p className="header-sub">MongoDB product catalog</p>
-            </div>
-          </div>
-          <div className="header-right">
-            <MobileNavigation />
-            <ThemeToggle />
-            <Link className="btn-ghost nav-link desktop-nav-link" href="/">
-              Invoice
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/inventory"
-              aria-current="page"
-            >
-              Inventory
-            </Link>
-            <Link
-              className="btn-ghost nav-link desktop-nav-link"
-              href="/saved-invoices"
-            >
-              Saved
-            </Link>
-            <Button className="btn-ghost" onClick={loadProducts}>
-              <RefreshCcwIcon aria-hidden="true" /> Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <main className="main inventory-main">
-        <section className="inventory-toolbar" aria-label="Inventory summary">
-          <div>
-            <span>Products</span>
-            <strong>{totalProducts}</strong>
-          </div>
-          <div>
-            <span>Units</span>
-            <strong>{totals.units}</strong>
-          </div>
-          <div>
-            <span>Value</span>
-            <strong>{formatMoney(totals.value)}</strong>
-          </div>
-          <div>
-            <span>Out</span>
-            <strong>{totals.out}</strong>
-          </div>
-        </section>
-
-        <div className="inventory-layout">
-          <section
-            className="panel inventory-form-panel"
-            aria-label="Product form"
-          >
-            <div className="inventory-panel-head">
-              <div className="panel-label">
-                {editingId ? "Edit Product" : "New Product"}
-              </div>
-              <Button className="btn-ghost" onClick={startCreate}>
-                <PlusIcon aria-hidden="true" /> New
-              </Button>
-            </div>
-
-            <div className="inventory-form">
-              <label className="field">
-                <span className="field-label">Name</span>
-                <Input
-                  className="in"
-                  value={form.name}
-                  onChange={(event) => setFormField("name", event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">SKU</span>
-                <Input
-                  className="in"
-                  value={form.sku}
-                  onChange={(event) => setFormField("sku", event.target.value)}
-                />
-              </label>
-              <label className="field full">
-                <span className="field-label">Description</span>
-                <Textarea
-                  className="in ta"
-                  rows={2}
-                  value={form.description}
-                  onChange={(event) =>
-                    setFormField("description", event.target.value)
-                  }
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Price</span>
-                <Input
-                  className="in"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(event) =>
-                    setFormField("price", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Tax %</span>
-                <Input
-                  className="in"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.taxRate}
-                  onChange={(event) =>
-                    setFormField("taxRate", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Stock</span>
-                <Input
-                  className="in"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={form.stockQty}
-                  onChange={(event) =>
-                    setFormField("stockQty", Number(event.target.value))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span className="field-label">Category</span>
-                <Input
-                  className="in"
-                  value={form.category}
-                  onChange={(event) =>
-                    setFormField("category", event.target.value)
-                  }
-                  placeholder="Category"
-                />
-              </label>
-            </div>
-
-            <div className="inventory-actions">
-              <Button
-                className="btn-primary"
-                onClick={saveProduct}
-                disabled={saving}
-              >
-                <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
-              </Button>
-              <input
-                ref={importInputRef}
-                className="sr-only"
-                type="file"
-                accept=".csv,.xls,.xlsx"
-                onChange={handleImport}
+    <DashboardFrame
+      title="Inventory"
+      actions={
+        <Button className="btn-ghost" onClick={loadProducts}>
+          <RefreshCcwIcon aria-hidden="true" /> Refresh
+        </Button>
+      }
+    >
+      <div className="app dashboard-route-app">
+        <header className="header no-print">
+          <div className="header-inner">
+            <div className="header-left">
+              <Image
+                src="/images/receipt-printer-logo.svg"
+                alt=""
+                className="app-logo"
+                width={34}
+                height={34}
+                priority
               />
-              <Button
-                className="btn-import"
-                variant="outline"
-                onClick={() => importInputRef.current?.click()}
-                disabled={importing}
+              <div>
+                <h1 className="header-title">Inventory</h1>
+                <p className="header-sub">MongoDB product catalog</p>
+              </div>
+            </div>
+            <div className="header-right">
+              <MobileNavigation />
+              <ThemeToggle />
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/invoice/new"
               >
-                <UploadIcon aria-hidden="true" />{" "}
-                {importing ? "Importing" : "Import"}
-              </Button>
-              <a className="btn-import" href="/api/products/import" download>
-                Sample XLSX
-              </a>
-              <Button
-                className="btn-import"
-                variant="outline"
-                onClick={seedDemoProducts}
-                disabled={seeding}
+                Invoice
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/inventory"
+                aria-current="page"
               >
-                <BoxesIcon aria-hidden="true" />{" "}
-                {seeding ? "Adding" : "Demo products"}
+                Inventory
+              </Link>
+              <Link
+                className="btn-ghost nav-link desktop-nav-link"
+                href="/saved-invoices"
+              >
+                Saved
+              </Link>
+              <Button className="btn-ghost" onClick={loadProducts}>
+                <RefreshCcwIcon aria-hidden="true" /> Refresh
               </Button>
             </div>
+          </div>
+        </header>
 
-            {message && (
-              <div className="inventory-status">
-                <CheckIcon aria-hidden="true" /> {message}
-              </div>
-            )}
-            {importSummary && (
-              <div className="inventory-status">
-                <UploadIcon aria-hidden="true" />
-                {importSummary.inserted} inserted, {importSummary.updated}{" "}
-                updated, {importSummary.failed} failed
-              </div>
-            )}
-            {error && (
-              <div className="inventory-status is-error" role="alert">
-                {error}
-              </div>
-            )}
+        <main className="main inventory-main">
+          <section className="inventory-toolbar" aria-label="Inventory summary">
+            <div>
+              <span>Products</span>
+              <strong>{totalProducts}</strong>
+            </div>
+            <div>
+              <span>Units</span>
+              <strong>{totals.units}</strong>
+            </div>
+            <div>
+              <span>Value</span>
+              <strong>{formatMoney(totals.value)}</strong>
+            </div>
+            <div>
+              <span>Out</span>
+              <strong>{totals.out}</strong>
+            </div>
           </section>
 
-          <section className="panel inventory-list-panel" aria-label="Products">
-            <div className="inventory-list-head">
-              <div className="inventory-list-heading desktop-only">
-                <div>
-                  <span className="inventory-kicker">Catalog</span>
-                  <h2>Product library</h2>
+          <div className="inventory-layout">
+            <section
+              className="panel inventory-form-panel"
+              aria-label="Product form"
+            >
+              <div className="inventory-panel-head">
+                <div className="panel-label">
+                  {editingId ? "Edit Product" : "New Product"}
                 </div>
-                <span className="inventory-list-count">
-                  {totalProducts
-                    ? `${firstVisibleProduct}-${lastVisibleProduct} of ${totalProducts}`
-                    : "0 products"}
-                </span>
+                <Button className="btn-ghost" onClick={startCreate}>
+                  <PlusIcon aria-hidden="true" /> New
+                </Button>
               </div>
-              <div className="inventory-search">
-                <SearchIcon aria-hidden="true" />
-                <Input
-                  className="in"
-                  value={query}
-                  onChange={(event) => {
-                    setQuery(event.target.value)
-                    setPage(1)
-                  }}
-                  placeholder="Search products"
-                />
-              </div>
-            </div>
 
-            <div className="inventory-table-wrap">
-              <table className="inventory-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>SKU</th>
-                    <th>Price</th>
-                    <th>Tax</th>
-                    <th>Stock</th>
-                    <th>Adjust</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
+              <div className="inventory-form">
+                <label className="field">
+                  <span className="field-label">Name</span>
+                  <Input
+                    className="in"
+                    value={form.name}
+                    onChange={(event) =>
+                      setFormField("name", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">SKU</span>
+                  <Input
+                    className="in"
+                    value={form.sku}
+                    onChange={(event) =>
+                      setFormField("sku", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="field full">
+                  <span className="field-label">Description</span>
+                  <Textarea
+                    className="in ta"
+                    rows={2}
+                    value={form.description}
+                    onChange={(event) =>
+                      setFormField("description", event.target.value)
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Price</span>
+                  <Input
+                    className="in"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.price}
+                    onChange={(event) =>
+                      setFormField("price", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Tax %</span>
+                  <Input
+                    className="in"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.taxRate}
+                    onChange={(event) =>
+                      setFormField("taxRate", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Stock</span>
+                  <Input
+                    className="in"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.stockQty}
+                    onChange={(event) =>
+                      setFormField("stockQty", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Category</span>
+                  <Input
+                    className="in"
+                    value={form.category}
+                    onChange={(event) =>
+                      setFormField("category", event.target.value)
+                    }
+                    placeholder="Category"
+                  />
+                </label>
+              </div>
+
+              <div className="inventory-actions">
+                <Button
+                  className="btn-primary"
+                  onClick={saveProduct}
+                  disabled={saving}
+                >
+                  <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
+                </Button>
+                <input
+                  ref={importInputRef}
+                  className="sr-only"
+                  type="file"
+                  accept=".csv,.xls,.xlsx"
+                  onChange={handleImport}
+                />
+                <Button
+                  className="btn-import"
+                  variant="outline"
+                  onClick={() => importInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  <UploadIcon aria-hidden="true" />{" "}
+                  {importing ? "Importing" : "Import"}
+                </Button>
+                <a className="btn-import" href="/api/products/import" download>
+                  Sample XLSX
+                </a>
+                <Button
+                  className="btn-import"
+                  variant="outline"
+                  onClick={seedDemoProducts}
+                  disabled={seeding}
+                >
+                  <BoxesIcon aria-hidden="true" />{" "}
+                  {seeding ? "Adding" : "Demo products"}
+                </Button>
+              </div>
+
+              {message && (
+                <div className="inventory-status">
+                  <CheckIcon aria-hidden="true" /> {message}
+                </div>
+              )}
+              {importSummary && (
+                <div className="inventory-status">
+                  <UploadIcon aria-hidden="true" />
+                  {importSummary.inserted} inserted, {importSummary.updated}{" "}
+                  updated, {importSummary.failed} failed
+                </div>
+              )}
+              {error && (
+                <div className="inventory-status is-error" role="alert">
+                  {error}
+                </div>
+              )}
+            </section>
+
+            <section
+              className="panel inventory-list-panel"
+              aria-label="Products"
+            >
+              <div className="inventory-list-head">
+                <div className="inventory-list-heading desktop-only">
+                  <div>
+                    <span className="inventory-kicker">Catalog</span>
+                    <h2>Product library</h2>
+                  </div>
+                  <span className="inventory-list-count">
+                    {totalProducts
+                      ? `${firstVisibleProduct}-${lastVisibleProduct} of ${totalProducts}`
+                      : "0 products"}
+                  </span>
+                </div>
+                <div className="inventory-search">
+                  <SearchIcon aria-hidden="true" />
+                  <Input
+                    className="in"
+                    value={query}
+                    onChange={(event) => {
+                      setQuery(event.target.value)
+                      setPage(1)
+                    }}
+                    placeholder="Search products"
+                  />
+                </div>
+              </div>
+
+              <div className="inventory-table-wrap">
+                <table className="inventory-table">
+                  <thead>
                     <tr>
-                      <td colSpan={7}>Loading inventory...</td>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Price</th>
+                      <th>Tax</th>
+                      <th>Stock</th>
+                      <th>Adjust</th>
+                      <th />
                     </tr>
-                  ) : products.length ? (
-                    products.map((product) => (
-                      <tr key={product._id}>
-                        <td>
-                          <strong>{product.name}</strong>
-                          <span>{product.category || product.description}</span>
-                        </td>
-                        <td>{product.sku}</td>
-                        <td>{formatMoney(product.price)}</td>
-                        <td>{product.taxRate}%</td>
-                        <td>
-                          <span
-                            className={
-                              product.stockQty <= 0
-                                ? "stock-pill is-empty"
-                                : "stock-pill"
-                            }
-                          >
-                            {product.stockQty}
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td colSpan={7}>Loading inventory...</td>
+                      </tr>
+                    ) : products.length ? (
+                      products.map((product) => (
+                        <tr key={product._id}>
+                          <td>
+                            <strong>{product.name}</strong>
+                            <span>
+                              {product.category || product.description}
+                            </span>
+                          </td>
+                          <td>{product.sku}</td>
+                          <td>{formatMoney(product.price)}</td>
+                          <td>{product.taxRate}%</td>
+                          <td>
+                            <span
+                              className={
+                                product.stockQty <= 0
+                                  ? "stock-pill is-empty"
+                                  : "stock-pill"
+                              }
+                            >
+                              {product.stockQty}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="stock-stepper">
+                              <Button
+                                className="stock-step"
+                                size="icon-sm"
+                                variant="ghost"
+                                onClick={() => updateStock(product, -1)}
+                                disabled={product.stockQty <= 0}
+                                aria-label={`Reduce ${product.name} stock`}
+                              >
+                                -
+                              </Button>
+                              <Button
+                                className="stock-step"
+                                size="icon-sm"
+                                variant="ghost"
+                                onClick={() => updateStock(product, 1)}
+                                aria-label={`Increase ${product.name} stock`}
+                              >
+                                +
+                              </Button>
+                            </div>
+                          </td>
+                          <td>
+                            <ProductEditPopover
+                              product={product}
+                              onSave={(nextForm) =>
+                                persistProduct(product._id, nextForm)
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7}>
+                          <span className="inventory-empty">
+                            <BoxesIcon aria-hidden="true" /> No products found
                           </span>
                         </td>
-                        <td>
-                          <div className="stock-stepper">
-                            <Button
-                              className="stock-step"
-                              size="icon-sm"
-                              variant="ghost"
-                              onClick={() => updateStock(product, -1)}
-                              disabled={product.stockQty <= 0}
-                              aria-label={`Reduce ${product.name} stock`}
-                            >
-                              -
-                            </Button>
-                            <Button
-                              className="stock-step"
-                              size="icon-sm"
-                              variant="ghost"
-                              onClick={() => updateStock(product, 1)}
-                              aria-label={`Increase ${product.name} stock`}
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </td>
-                        <td>
-                          <ProductEditPopover
-                            product={product}
-                            onSave={(nextForm) =>
-                              persistProduct(product._id, nextForm)
-                            }
-                          />
-                        </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7}>
-                        <span className="inventory-empty">
-                          <BoxesIcon aria-hidden="true" /> No products found
-                        </span>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <nav className="inventory-pagination" aria-label="Product pages">
-                <Button
-                  className="btn-ghost"
-                  variant="outline"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={page === 1 || loading}
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <nav
+                  className="inventory-pagination"
+                  aria-label="Product pages"
                 >
-                  Previous
-                </Button>
-                <span>
-                  Page {page} of {totalPages}
-                </span>
-                <Button
-                  className="btn-ghost"
-                  variant="outline"
-                  onClick={() =>
-                    setPage((current) => Math.min(totalPages, current + 1))
-                  }
-                  disabled={page === totalPages || loading}
-                >
-                  Next
-                </Button>
-              </nav>
-            )}
-          </section>
-        </div>
-      </main>
-    </div>
+                  <Button
+                    className="btn-ghost"
+                    variant="outline"
+                    onClick={() =>
+                      setPage((current) => Math.max(1, current - 1))
+                    }
+                    disabled={page === 1 || loading}
+                  >
+                    Previous
+                  </Button>
+                  <span>
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    className="btn-ghost"
+                    variant="outline"
+                    onClick={() =>
+                      setPage((current) => Math.min(totalPages, current + 1))
+                    }
+                    disabled={page === totalPages || loading}
+                  >
+                    Next
+                  </Button>
+                </nav>
+              )}
+            </section>
+          </div>
+        </main>
+      </div>
+    </DashboardFrame>
   )
 }
 

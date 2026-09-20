@@ -23,7 +23,7 @@ import {
 import { ThemeToggle } from "@/components/theme-provider"
 
 const navigationItems = [
-  { href: "/", label: "Invoice", icon: FilePlus2Icon },
+  { href: "/invoice/new", label: "Invoice", icon: FilePlus2Icon },
   { href: "/inventory", label: "Inventory", icon: BoxesIcon },
   { href: "/saved-invoices", label: "Saved invoices", icon: ArchiveIcon },
 ]
@@ -65,8 +65,8 @@ export function MobileNavigation() {
                 {navigationItems.map((item) => {
                   const Icon = item.icon
                   const isActive =
-                    item.href === "/"
-                      ? pathname === "/" || pathname === "/invoice"
+                    item.href === "/invoice/new"
+                      ? pathname.startsWith("/invoice")
                       : pathname.startsWith(item.href)
 
                   return (
