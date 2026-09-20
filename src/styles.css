@@ -2826,14 +2826,13 @@ body {
   padding: 0 !important;
 }
 
-[data-state="collapsed"]
-  .dashboard-sidebar
-  [data-sidebar="menu-button"]
-  svg {
+[data-state="collapsed"] .dashboard-sidebar [data-sidebar="menu-button"] svg {
   transform: translateX(4px);
 }
 
-[data-state="collapsed"] .dashboard-sidebar [data-sidebar="menu-button"][data-active] {
+[data-state="collapsed"]
+  .dashboard-sidebar
+  [data-sidebar="menu-button"][data-active] {
   border-left: 0;
   padding: 0 !important;
 }
