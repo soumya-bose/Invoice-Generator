@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { MoonIcon, SunIcon } from "lucide-react"
 import { ThemeProvider as NextThemesProvider, useTheme } from "next-themes"
 
 function ThemeProvider({
@@ -68,4 +69,30 @@ function ThemeHotkey() {
   return null
 }
 
-export { ThemeProvider }
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = React.useState(false)
+
+  React.useEffect(() => setMounted(true), [])
+
+  const isLight = mounted && resolvedTheme === "light"
+
+  return (
+    <button
+      className="theme-toggle"
+      type="button"
+      onClick={() => setTheme(isLight ? "dark" : "light")}
+      aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+      title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+    >
+      {isLight ? (
+        <MoonIcon aria-hidden="true" />
+      ) : (
+        <SunIcon aria-hidden="true" />
+      )}
+      <span>{isLight ? "Dark" : "Light"}</span>
+    </button>
+  )
+}
+
+export { ThemeProvider, ThemeToggle }

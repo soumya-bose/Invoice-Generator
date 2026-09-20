@@ -2,6 +2,7 @@ import { Inter } from "next/font/google"
 
 import "./globals.css"
 import "@/src/styles.css"
+import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata = {
   title: "Invoice Generator",
@@ -21,12 +22,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={inter.variable}
-    >
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   )
 }

@@ -22,6 +22,8 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { MobileNavigation } from "@/components/MobileNavigation"
+import { ThemeToggle } from "@/components/theme-provider"
 import { Input } from "@/components/ui/input"
 import {
   Popover,
@@ -373,8 +375,23 @@ export function InventoryPage() {
             </div>
           </div>
           <div className="header-right">
-            <Link className="btn-ghost" href="/">
+            <MobileNavigation />
+            <ThemeToggle />
+            <Link className="btn-ghost nav-link desktop-nav-link" href="/">
               Invoice
+            </Link>
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/inventory"
+              aria-current="page"
+            >
+              Inventory
+            </Link>
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/saved-invoices"
+            >
+              Saved
             </Link>
             <Button className="btn-ghost" onClick={loadProducts}>
               <RefreshCcwIcon aria-hidden="true" /> Refresh

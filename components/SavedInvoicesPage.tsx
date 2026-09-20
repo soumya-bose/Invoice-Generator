@@ -7,8 +7,11 @@ import { useCallback, useEffect, useState } from "react"
 import { EyeIcon, RefreshCcwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { MobileNavigation } from "@/components/MobileNavigation"
+import { ThemeToggle } from "@/components/theme-provider"
 
-type CurrencyCode = "USD" | "EUR" | "GBP" | "TRY" | "JPY" | "CAD" | "AUD" | "INR"
+type CurrencyCode =
+  "USD" | "EUR" | "GBP" | "TRY" | "JPY" | "CAD" | "AUD" | "INR"
 type TaxMode = "exclusive" | "inclusive"
 
 type Party = {
@@ -199,11 +202,23 @@ export function SavedInvoicesPage() {
             </div>
           </div>
           <div className="header-right">
-            <Link className="btn-ghost" href="/">
+            <MobileNavigation />
+            <ThemeToggle />
+            <Link className="btn-ghost nav-link desktop-nav-link" href="/">
               Invoice
             </Link>
-            <Link className="btn-ghost" href="/inventory">
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/inventory"
+            >
               Inventory
+            </Link>
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/saved-invoices"
+              aria-current="page"
+            >
+              Saved
             </Link>
             <Button className="btn-ghost" onClick={loadInvoices}>
               <RefreshCcwIcon aria-hidden="true" /> Refresh
@@ -229,7 +244,9 @@ export function SavedInvoicesPage() {
           {error ? (
             <div className="invoice-error saved-invoices-error">{error}</div>
           ) : loading ? (
-            <div className="saved-invoices-empty">Loading saved invoices...</div>
+            <div className="saved-invoices-empty">
+              Loading saved invoices...
+            </div>
           ) : invoices.length ? (
             <div className="saved-invoices-list">
               {invoices.map((invoice) => (

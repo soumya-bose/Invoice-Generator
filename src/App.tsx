@@ -39,8 +39,11 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { ReceiptPrinter } from "@/components/ReceiptPrinter"
+import { MobileNavigation } from "@/components/MobileNavigation"
+import { ThemeToggle } from "@/components/theme-provider"
 
-type CurrencyCode = "USD" | "EUR" | "GBP" | "TRY" | "JPY" | "CAD" | "AUD" | "INR"
+type CurrencyCode =
+  "USD" | "EUR" | "GBP" | "TRY" | "JPY" | "CAD" | "AUD" | "INR"
 type TaxMode = "exclusive" | "inclusive"
 type ReceiptStage = "processing" | "printing" | "complete"
 
@@ -286,18 +289,14 @@ function asNumber(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback
 }
 
-function normalizeParty<T extends Party>(
-  defaults: T,
-  saved?: Partial<T>
-): T {
+function normalizeParty<T extends Party>(defaults: T, saved?: Partial<T>): T {
   const savedAddress = asString(saved?.address, defaults.address)
   const addressLines = savedAddress
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
   const migratedAddress = addressLines[0] || savedAddress
-  const migratedCity =
-    asString(saved?.city) || addressLines.slice(1).join(", ")
+  const migratedCity = asString(saved?.city) || addressLines.slice(1).join(", ")
 
   return {
     ...defaults,
@@ -884,9 +883,10 @@ export default function App() {
         }),
       })
 
-      const data = (await response.json().catch(() => null)) as
-        | { error?: string; errors?: string[] }
-        | null
+      const data = (await response.json().catch(() => null)) as {
+        error?: string
+        errors?: string[]
+      } | null
 
       if (!response.ok) {
         throw new Error(
@@ -1007,8 +1007,7 @@ export default function App() {
           body: formData,
         })
         const data = (await response.json().catch(() => null)) as
-          | (ImportSummary & { error?: string })
-          | null
+          (ImportSummary & { error?: string }) | null
 
         if (!response.ok) {
           throw new Error(data?.error || "Product import failed")
@@ -1057,6 +1056,29 @@ export default function App() {
             </div>
           </div>
           <div className="header-right">
+            <MobileNavigation />
+            <ThemeToggle />
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/"
+              aria-current={
+                isInvoiceRoute || pathname === "/" ? "page" : undefined
+              }
+            >
+              Invoice
+            </Link>
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/inventory"
+            >
+              Inventory
+            </Link>
+            <Link
+              className="btn-ghost nav-link desktop-nav-link"
+              href="/saved-invoices"
+            >
+              Saved
+            </Link>
             {isInvoiceRoute ? (
               <Button
                 className="btn-ghost"
@@ -1067,20 +1089,6 @@ export default function App() {
               </Button>
             ) : (
               <>
-                <Link
-                  className="btn-ghost"
-                  href="/inventory"
-                  aria-label="Open inventory"
-                >
-                  Inventory
-                </Link>
-                <Link
-                  className="btn-ghost"
-                  href="/saved-invoices"
-                  aria-label="Open saved invoices"
-                >
-                  Saved
-                </Link>
                 <Button
                   className="btn-ghost"
                   onClick={loadSample}
@@ -1371,8 +1379,7 @@ export default function App() {
                     const line = calc.lines.find((entry) => entry.id === it.id)
                     const isSearchingThisItem =
                       productSearch.activeItemId === it.id
-                    const hasStockLimit =
-                      typeof it.productStockQty === "number"
+                    const hasStockLimit = typeof it.productStockQty === "number"
                     return (
                       <div className="item-row" key={it.id}>
                         <div className="product-picker">
@@ -1585,9 +1592,8 @@ export default function App() {
                   </a>
                   {importSummary && (
                     <span className="import-status">
-                      {importSummary.inserted} inserted,{" "}
-                      {importSummary.updated} updated, {importSummary.failed}{" "}
-                      failed
+                      {importSummary.inserted} inserted, {importSummary.updated}{" "}
+                      updated, {importSummary.failed} failed
                     </span>
                   )}
                   {importError && (
@@ -2097,8 +2103,7 @@ function TaxInvoiceDocument({
   const businessName = business.name || "YOUR COMPANY NAME"
   const businessAddress =
     business.address || "Your Address Line 1, Your Address Line 2"
-  const businessCity =
-    formatCityStateZip(business) || "City, State - Pincode"
+  const businessCity = formatCityStateZip(business) || "City, State - Pincode"
   const clientAddress = client.address
   const clientCity = [client.city, client.state].filter(Boolean).join(", ")
 
@@ -2294,7 +2299,7 @@ function Field({
   full?: boolean
 }) {
   return (
-    <FormField className={`field${full ? " full" : ""}`}>
+    <FormField className={`field${full ? "full" : ""}`}>
       <FieldLabel className="field-label">{label}</FieldLabel>
       {children}
     </FormField>
