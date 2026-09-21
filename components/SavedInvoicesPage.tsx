@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { EyeIcon, RefreshCcwIcon } from "lucide-react"
+import { CheckCircle2Icon, EyeIcon, PencilIcon, RefreshCcwIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DashboardFrame } from "@/components/DashboardFrame"
@@ -54,6 +54,7 @@ type SavedInvoice = {
 }
 
 type InvoiceState = {
+  invoiceId?: string
   business: Required<Party>
   client: Omit<Party, "phone"> & { phone?: string }
   meta: {
@@ -133,6 +134,9 @@ export function SavedInvoicesPage() {
   const [totalInvoices, setTotalInvoices] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const loadInvoices = useCallback(async () => {
     setLoading(true)
@@ -178,6 +182,52 @@ export function SavedInvoicesPage() {
       router.push("/invoice")
     },
     [router]
+  )
+
+  const editInvoice = useCallback(
+    (invoice: SavedInvoice) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toInvoiceState(invoice)))
+      router.push("/invoice/new")
+    },
+    [router]
+  )
+
+  const handleDeleteInvoice = useCallback(
+    async (invoice: SavedInvoice) => {
+      setDeletingId(invoice._id)
+      setError("")
+      setNotice("")
+
+      try {
+        const response = await fetch(`/api/invoices/${invoice._id}`, {
+          method: "DELETE",
+        })
+        const data = (await response.json().catch(() => null)) as {
+          message?: string
+          error?: string
+        } | null
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to delete invoice")
+        }
+
+        setNotice(
+          data?.message ||
+            `Invoice ${invoice.invoiceNumber} deleted and stock restored to inventory`
+        )
+        setConfirmDeleteId(null)
+        await loadInvoices()
+      } catch (deleteError) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Failed to delete invoice"
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [loadInvoices]
   )
 
   const totalPages = Math.max(1, Math.ceil(totalInvoices / PAGE_SIZE))
@@ -253,6 +303,26 @@ export function SavedInvoicesPage() {
               </span>
             </div>
 
+            {notice && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "0.5rem",
+                  background: "rgba(34, 197, 94, 0.1)",
+                  border: "1px solid rgba(34, 197, 94, 0.3)",
+                  color: "#16a34a",
+                  fontSize: "0.875rem",
+                  marginBottom: "1rem",
+                }}
+              >
+                <CheckCircle2Icon aria-hidden="true" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span>{notice}</span>
+              </div>
+            )}
+
             {error ? (
               <div className="invoice-error saved-invoices-error">{error}</div>
             ) : loading ? (
@@ -278,14 +348,67 @@ export function SavedInvoicesPage() {
                           : DEFAULT_STATE.meta.currency
                       )}
                     </b>
-                    <Button
-                      className="btn-import"
-                      type="button"
-                      variant="outline"
-                      onClick={() => viewInvoice(invoice)}
-                    >
-                      <EyeIcon aria-hidden="true" /> View
-                    </Button>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                      <Button
+                        className="btn-import"
+                        type="button"
+                        variant="outline"
+                        onClick={() => viewInvoice(invoice)}
+                      >
+                        <EyeIcon aria-hidden="true" /> View
+                      </Button>
+                      <Button
+                        className="btn-import"
+                        type="button"
+                        variant="outline"
+                        onClick={() => editInvoice(invoice)}
+                      >
+                        <PencilIcon aria-hidden="true" /> Edit
+                      </Button>
+                      {confirmDeleteId === invoice._id ? (
+                        <div style={{ display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
+                          <Button
+                            type="button"
+                            size="sm"
+                            style={{
+                              background: "#ef4444",
+                              color: "#ffffff",
+                              border: "none",
+                              padding: "0 0.6rem",
+                              height: "2rem",
+                              fontWeight: 600,
+                            }}
+                            onClick={() => void handleDeleteInvoice(invoice)}
+                            disabled={deletingId === invoice._id}
+                          >
+                            {deletingId === invoice._id ? "Restoring..." : "Confirm"}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            style={{ height: "2rem" }}
+                            onClick={() => setConfirmDeleteId(null)}
+                            disabled={deletingId === invoice._id}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                          onClick={() => {
+                            setError("")
+                            setNotice("")
+                            setConfirmDeleteId(invoice._id)
+                          }}
+                        >
+                          <Trash2Icon aria-hidden="true" /> Delete
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -333,6 +456,7 @@ function toInvoiceState(invoice: SavedInvoice): InvoiceState {
 
   return {
     ...DEFAULT_STATE,
+    invoiceId: invoice._id,
     business: normalizeParty<InvoiceState["business"]>(
       DEFAULT_STATE.business,
       invoice.business

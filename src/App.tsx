@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import Image from "next/image"
 import Link from "next/link"
@@ -71,15 +71,18 @@ type InvoiceItem = {
   description: string
   qty: number
   price: number
+  mrp: number
   discount: number
   taxRate: number
   taxMode: TaxMode
+  itemType: "service" | "product"
   productId?: string
   productSku?: string
   productStockQty?: number
 }
 
 type InvoiceState = {
+  invoiceId?: string
   business: Required<Party>
   client: Omit<Party, "phone"> & { phone?: string }
   meta: InvoiceMeta
@@ -87,6 +90,7 @@ type InvoiceState = {
   taxRate: number
   discount: number
   notes: string
+  lineItemType: "service" | "product"
 }
 
 type CalcLine = {
@@ -113,6 +117,7 @@ type ProductSuggestion = {
   description: string
   sku: string
   price: number
+  mrp: number
   taxRate: number
   stockQty: number
   category: string
@@ -163,6 +168,7 @@ function plusDaysISO(days: number) {
 }
 
 const DEFAULT_STATE: InvoiceState = {
+  invoiceId: undefined,
   business: {
     name: "",
     email: "",
@@ -194,17 +200,21 @@ const DEFAULT_STATE: InvoiceState = {
       description: "",
       qty: 1,
       price: 0,
+      mrp: 0,
       discount: 0,
       taxRate: 0,
       taxMode: "exclusive",
+      itemType: "service",
     },
   ],
   taxRate: 0,
   discount: 0,
   notes: "Thank you for your business!",
+  lineItemType: "service",
 }
 
 const SAMPLE_STATE: InvoiceState = {
+  invoiceId: undefined,
   business: {
     name: "Acme Studio",
     email: "hello@acmestudio.com",
@@ -236,38 +246,47 @@ const SAMPLE_STATE: InvoiceState = {
       description: "Brand identity & logo design",
       qty: 1,
       price: 1800,
+      mrp: 0,
       discount: 5,
       taxRate: 18,
       taxMode: "exclusive",
+      itemType: "service",
     },
     {
       id: newId(),
       description: "Website UI design (5 pages)",
       qty: 5,
       price: 320,
+      mrp: 0,
       discount: 0,
       taxRate: 18,
       taxMode: "inclusive",
+      itemType: "service",
     },
     {
       id: newId(),
       description: "Design revision rounds",
       qty: 3,
       price: 120,
+      mrp: 0,
       discount: 10,
       taxRate: 12,
       taxMode: "exclusive",
+      itemType: "service",
     },
   ],
   taxRate: 8,
   discount: 5,
   notes:
     "Payment due within 14 days via bank transfer.\nThank you for your business!",
+  lineItemType: "service",
 }
 
 type StoredInvoiceState = Partial<
   Omit<InvoiceState, "business" | "client" | "meta" | "items">
 > & {
+  invoiceId?: string
+  _id?: string
   business?: Partial<InvoiceState["business"]>
   client?: Partial<InvoiceState["client"]>
   meta?: Partial<InvoiceMeta>
@@ -332,12 +351,16 @@ function loadState(): InvoiceState {
       currency: metaCurrency,
     }
 
+    const invoiceId = asString(parsed.invoiceId || parsed._id) || undefined
+
     return {
       ...DEFAULT_STATE,
       ...parsed,
+      invoiceId,
       business: normalizeParty(DEFAULT_STATE.business, parsed.business),
       client: normalizeParty(DEFAULT_STATE.client, parsed.client),
       meta,
+      lineItemType: parsed.lineItemType === "product" ? "product" : "service",
       items:
         Array.isArray(parsed.items) && parsed.items.length
           ? parsed.items.map((i) => ({
@@ -345,9 +368,14 @@ function loadState(): InvoiceState {
               description: asString(i.description),
               qty: asNumber(i.qty, 1),
               price: asNumber(i.price),
+              mrp: asNumber(i.mrp, 0),
               discount: asNumber(i.discount, asNumber(parsed.discount)),
               taxRate: asNumber(i.taxRate, asNumber(parsed.taxRate)),
               taxMode: isTaxMode(i.taxMode) ? i.taxMode : "exclusive",
+              itemType:
+                i.itemType === "product" || parsed.lineItemType === "product"
+                  ? "product"
+                  : "service",
               productId: asString(i.productId) || undefined,
               productSku: asString(i.productSku) || undefined,
               productStockQty:
@@ -516,7 +544,8 @@ export default function App() {
   const generationTimers = useRef<number[]>([])
   const hydrationTimer = useRef<number | null>(null)
 
-  const { business, client, meta, items, notes } = state
+  const { business, client, meta, items, notes, lineItemType = "service" } =
+    state
   const isInvoiceRoute = pathname === "/invoice"
 
   useEffect(() => {
@@ -676,6 +705,88 @@ export default function App() {
     [markInvoiceDirty]
   )
 
+  const calculateDiscountFromMrp = useCallback(
+    (mrp: number, price: number) => {
+      if (mrp > 0 && price >= 0) {
+        if (price >= mrp) return 0
+        return Number((((mrp - price) / mrp) * 100).toFixed(2))
+      }
+      return 0
+    },
+    []
+  )
+
+  const handleLineItemTypeChange = useCallback(
+    (type: "service" | "product") => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        lineItemType: type,
+        items: s.items.map((it) => {
+          if (type === "product") {
+            const autoDiscount = calculateDiscountFromMrp(it.mrp, it.price)
+            return {
+              ...it,
+              itemType: "product",
+              discount: autoDiscount,
+            }
+          }
+          return {
+            ...it,
+            itemType: "service",
+          }
+        }),
+      }))
+    },
+    [calculateDiscountFromMrp, markInvoiceDirty]
+  )
+
+  const updateItemMrp = useCallback(
+    (id: string, mrp: number) => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          if (it.id !== id) return it
+          const nextMrp = Math.max(0, mrp)
+          const autoDiscount =
+            (s.lineItemType || "service") === "product"
+              ? calculateDiscountFromMrp(nextMrp, it.price)
+              : it.discount
+          return {
+            ...it,
+            mrp: nextMrp,
+            discount: autoDiscount,
+          }
+        }),
+      }))
+    },
+    [calculateDiscountFromMrp, markInvoiceDirty]
+  )
+
+  const updateItemPrice = useCallback(
+    (id: string, price: number) => {
+      markInvoiceDirty()
+      setState((s) => ({
+        ...s,
+        items: s.items.map((it) => {
+          if (it.id !== id) return it
+          const nextPrice = Math.max(0, price)
+          const autoDiscount =
+            (s.lineItemType || "service") === "product"
+              ? calculateDiscountFromMrp(it.mrp, nextPrice)
+              : it.discount
+          return {
+            ...it,
+            price: nextPrice,
+            discount: autoDiscount,
+          }
+        }),
+      }))
+    },
+    [calculateDiscountFromMrp, markInvoiceDirty]
+  )
+
   const selectProduct = useCallback(
     (itemId: string, product: ProductSuggestion) => {
       markInvoiceDirty()
@@ -685,11 +796,18 @@ export default function App() {
           if (it.id !== itemId) return it
 
           const nextQty = Number(it.qty) > 0 ? Number(it.qty) : 1
+          const itemMrp = product.mrp || 0
+          const autoDiscount =
+            (s.lineItemType || "service") === "product"
+              ? calculateDiscountFromMrp(itemMrp, product.price)
+              : it.discount
 
           return {
             ...it,
             description: product.name,
             price: product.price,
+            mrp: itemMrp,
+            discount: autoDiscount,
             taxRate: product.taxRate,
             qty: Math.min(nextQty, product.stockQty),
             productId: product._id,
@@ -705,7 +823,7 @@ export default function App() {
         query: "",
       })
     },
-    [markInvoiceDirty]
+    [calculateDiscountFromMrp, markInvoiceDirty]
   )
 
   const updateItemQty = useCallback(
@@ -739,9 +857,11 @@ export default function App() {
           description: "",
           qty: 1,
           price: 0,
+          mrp: 0,
           discount: 0,
           taxRate: 0,
           taxMode: "exclusive",
+          itemType: s.lineItemType || "service",
         },
       ],
     }))
@@ -769,9 +889,11 @@ export default function App() {
           description: "",
           qty: 1,
           price: 0,
+          mrp: 0,
           discount: 0,
           taxRate: 0,
           taxMode: "exclusive",
+          itemType: "service",
         },
       ],
       meta: {
@@ -810,8 +932,14 @@ export default function App() {
       const discountRate = Number(it.discount) || 0
       const taxRate = Number(it.taxRate) || 0
       const taxMultiplier = 1 + taxRate / 100
-      const amount = qty * price
-      const discountAmount = amount * (discountRate / 100)
+      const isProduct =
+        (lineItemType === "product" || it.itemType === "product") &&
+        it.mrp > 0 &&
+        it.mrp > price
+      const amount = isProduct ? qty * it.mrp : qty * price
+      const discountAmount = isProduct
+        ? qty * (it.mrp - price)
+        : amount * (discountRate / 100)
       const discounted = Math.max(0, amount - discountAmount)
       const isInclusive = it.taxMode === "inclusive" && taxRate > 0
       const taxable = isInclusive ? discounted / taxMultiplier : discounted
@@ -832,7 +960,7 @@ export default function App() {
     const total = lines.reduce((sum, line) => sum + line.total, 0)
 
     return { subtotal, discountAmount, taxable, taxAmount, total, lines }
-  }, [items])
+  }, [items, lineItemType])
 
   const handleGenerateInvoice = useCallback(async () => {
     clearGenerationTimers()
@@ -857,8 +985,14 @@ export default function App() {
     }
 
     try {
-      const response = await fetch("/api/invoices", {
-        method: "POST",
+      const isEditing = Boolean(state.invoiceId)
+      const url = isEditing
+        ? `/api/invoices/${encodeURIComponent(state.invoiceId!)}`
+        : "/api/invoices"
+      const method = isEditing ? "PUT" : "POST"
+
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           invoiceNumber: meta.number,
@@ -872,6 +1006,7 @@ export default function App() {
             description: item.description,
             qty: item.qty,
             price: item.price,
+            mrp: item.mrp || 0,
             discount: item.discount,
             taxRate: item.taxRate,
             taxMode: item.taxMode,
@@ -885,15 +1020,22 @@ export default function App() {
       })
 
       const data = (await response.json().catch(() => null)) as {
+        invoice?: { _id?: string }
         error?: string
         errors?: string[]
       } | null
 
       if (!response.ok) {
         throw new Error(
-          data?.error || data?.errors?.join(", ") || "Invoice creation failed"
+          data?.error ||
+            data?.errors?.join(", ") ||
+            (isEditing ? "Invoice update failed" : "Invoice creation failed")
         )
       }
+
+      const returnedId = data?.invoice?._id
+        ? String(data.invoice._id)
+        : state.invoiceId
 
       const reductions = new Map<string, number>()
       state.items.forEach((item) => {
@@ -906,6 +1048,7 @@ export default function App() {
 
       setState((s) => ({
         ...s,
+        invoiceId: returnedId,
         items: s.items.map((item) => {
           if (!item.productId || typeof item.productStockQty !== "number") {
             return item
@@ -922,7 +1065,7 @@ export default function App() {
       }))
     } catch (error) {
       setInvoiceError(
-        error instanceof Error ? error.message : "Invoice creation failed"
+        error instanceof Error ? error.message : "Invoice save failed"
       )
       setIsSavingInvoice(false)
       return
@@ -983,7 +1126,7 @@ export default function App() {
     setShowReceiptPrinter(false)
     setInvoiceGenerated(false)
     setReceiptStage("processing")
-    router.push("/")
+    router.push("/invoice/new")
   }, [clearGenerationTimers, router])
 
   const handlePrint = useCallback(() => {
@@ -1149,6 +1292,39 @@ export default function App() {
             {/* Editor */}
             {!isInvoiceRoute && (
               <section className="editor no-print" aria-label="Invoice editor">
+                {state.invoiceId && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "0.5rem",
+                      background: "rgba(59, 130, 246, 0.1)",
+                      border: "1px solid rgba(59, 130, 246, 0.3)",
+                      color: "inherit",
+                      fontSize: "0.875rem",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ color: "#3b82f6" }}>
+                        Editing Saved Invoice {meta.number}:
+                      </strong>{" "}
+                      Saving will update this invoice in-place and synchronize inventory stock.
+                    </div>
+                    <Button
+                      className="btn-ghost"
+                      type="button"
+                      size="sm"
+                      onClick={resetAll}
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      New Invoice
+                    </Button>
+                  </div>
+                )}
                 <Panel title="Your Business">
                   <div className="field-grid">
                     <Field label="Business name" full>
@@ -1399,11 +1575,50 @@ export default function App() {
                   </div>
                 </Panel>
 
-                <Panel title="Line Items">
-                  <div className="items-editor">
+                <Panel
+                  title="Line Items"
+                  actions={
+                    <div
+                      className="line-item-type-radios"
+                      role="radiogroup"
+                      aria-label="Line item type"
+                    >
+                      <label
+                        className={`line-item-type-radio ${lineItemType === "service" ? "is-active" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="lineItemType"
+                          value="service"
+                          checked={lineItemType === "service"}
+                          onChange={() => handleLineItemTypeChange("service")}
+                        />
+                        <span>Service</span>
+                      </label>
+                      <label
+                        className={`line-item-type-radio ${lineItemType === "product" ? "is-active" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="lineItemType"
+                          value="product"
+                          checked={lineItemType === "product"}
+                          onChange={() => handleLineItemTypeChange("product")}
+                        />
+                        <span>Product</span>
+                      </label>
+                    </div>
+                  }
+                >
+                  <div
+                    className={`items-editor ${lineItemType === "product" ? "is-product" : ""}`}
+                  >
                     <div className="item-head">
                       <span className="ih-desc">Description</span>
                       <span className="ih-qty">Qty</span>
+                      {lineItemType === "product" && (
+                        <span className="ih-mrp">MRP</span>
+                      )}
                       <span className="ih-price">Price</span>
                       <span className="ih-discount">Disc %</span>
                       <span className="ih-tax">Tax %</span>
@@ -1420,7 +1635,10 @@ export default function App() {
                       const hasStockLimit =
                         typeof it.productStockQty === "number"
                       return (
-                        <div className="item-row" key={it.id}>
+                        <div
+                          className={`item-row ${lineItemType === "product" ? "is-product" : ""}`}
+                          key={it.id}
+                        >
                           <div className="product-picker">
                             <Input
                               className="in item-desc"
@@ -1520,6 +1738,27 @@ export default function App() {
                               aria-label="Quantity"
                             />
                           </div>
+                          {lineItemType === "product" && (
+                            <div className="item-control item-mrp">
+                              <span>MRP</span>
+                              <Input
+                                className="in item-num"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={it.mrp || 0}
+                                onChange={(e) =>
+                                  updateItemMrp(
+                                    it.id,
+                                    e.target.value === ""
+                                      ? 0
+                                      : Number(e.target.value)
+                                  )
+                                }
+                                aria-label="MRP"
+                              />
+                            </div>
+                          )}
                           <div className="item-control item-price">
                             <span>Price</span>
                             <Input
@@ -1529,9 +1768,8 @@ export default function App() {
                               step="0.01"
                               value={it.price}
                               onChange={(e) =>
-                                updateItem(
+                                updateItemPrice(
                                   it.id,
-                                  "price",
                                   e.target.value === ""
                                     ? 0
                                     : Number(e.target.value)
@@ -1542,24 +1780,35 @@ export default function App() {
                           </div>
                           <div className="item-control item-discount">
                             <span>Disc</span>
-                            <Input
-                              className="in item-num"
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.01"
-                              value={it.discount}
-                              onChange={(e) =>
-                                updateItem(
-                                  it.id,
-                                  "discount",
-                                  e.target.value === ""
-                                    ? 0
-                                    : Number(e.target.value)
-                                )
-                              }
-                              aria-label="Discount percent"
-                            />
+                            {lineItemType === "product" ? (
+                              <Input
+                                className="in item-num is-auto-discount"
+                                type="text"
+                                readOnly
+                                value={`${it.discount || 0}%`}
+                                aria-label="Auto-calculated discount percent"
+                                title="Auto-calculated based on MRP and price"
+                              />
+                            ) : (
+                              <Input
+                                className="in item-num"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={it.discount}
+                                onChange={(e) =>
+                                  updateItem(
+                                    it.id,
+                                    "discount",
+                                    e.target.value === ""
+                                      ? 0
+                                      : Number(e.target.value)
+                                  )
+                                }
+                                aria-label="Discount percent"
+                              />
+                            )}
                           </div>
                           <div className="item-control item-tax">
                             <span>Tax</span>
@@ -1572,12 +1821,15 @@ export default function App() {
                               }
                             />
                           </div>
-                          <TaxModeDropdown
-                            value={it.taxMode || "exclusive"}
-                            onChange={(value) =>
-                              updateItem(it.id, "taxMode", value)
-                            }
-                          />
+                          <div className="item-control item-mode">
+                            <span>Tax type</span>
+                            <TaxModeDropdown
+                              value={it.taxMode || "exclusive"}
+                              onChange={(value) =>
+                                updateItem(it.id, "taxMode", value)
+                              }
+                            />
+                          </div>
                           <div className="item-total">
                             <span>
                               {formatMoney(line?.total ?? 0, currency)}
@@ -1686,12 +1938,18 @@ export default function App() {
                     className="btn-primary btn-generate"
                     onClick={handleGenerateInvoice}
                     disabled={isGenerating || isSavingInvoice}
-                    aria-label="Generate invoice"
+                    aria-label={
+                      state.invoiceId ? "Update invoice" : "Generate invoice"
+                    }
                   >
                     <IconReceipt />{" "}
                     {isGenerating || isSavingInvoice
-                      ? "Generating..."
-                      : "Generate Invoice"}
+                      ? state.invoiceId
+                        ? "Updating..."
+                        : "Generating..."
+                      : state.invoiceId
+                        ? "Update Invoice"
+                        : "Generate Invoice"}
                   </Button>
                 </div>
                 {invoiceError && (
@@ -2333,10 +2591,25 @@ function TaxInvoiceDocument({
   )
 }
 
-function Panel({ title, children }: { title: string; children: ReactNode }) {
+function Panel({
+  title,
+  actions,
+  children,
+}: {
+  title: string
+  actions?: ReactNode
+  children: ReactNode
+}) {
   return (
     <div className="panel">
-      <div className="panel-label">{title}</div>
+      {actions ? (
+        <div className="panel-head">
+          <div className="panel-label">{title}</div>
+          {actions}
+        </div>
+      ) : (
+        <div className="panel-label">{title}</div>
+      )}
       {children}
     </div>
   )

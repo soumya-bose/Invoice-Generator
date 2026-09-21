@@ -39,6 +39,8 @@ type Product = {
   description: string
   sku: string
   price: number
+  buyPrice: number
+  mrp: number
   taxRate: number
   stockQty: number
   category: string
@@ -59,6 +61,8 @@ const EMPTY_FORM: ProductForm = {
   description: "",
   sku: "",
   price: 0,
+  buyPrice: 0,
+  mrp: 0,
   taxRate: 0,
   stockQty: 0,
   category: "",
@@ -163,6 +167,8 @@ export function InventoryPage() {
       description: product.description,
       sku: product.sku,
       price: product.price,
+      buyPrice: product.buyPrice || 0,
+      mrp: product.mrp,
       taxRate: product.taxRate,
       stockQty: product.stockQty,
       category: product.category,
@@ -479,6 +485,19 @@ export function InventoryPage() {
                   />
                 </label>
                 <label className="field">
+                  <span className="field-label">MRP</span>
+                  <Input
+                    className="in"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.mrp}
+                    onChange={(event) =>
+                      setFormField("mrp", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
                   <span className="field-label">Price</span>
                   <Input
                     className="in"
@@ -488,6 +507,19 @@ export function InventoryPage() {
                     value={form.price}
                     onChange={(event) =>
                       setFormField("price", Number(event.target.value))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span className="field-label">Buy</span>
+                  <Input
+                    className="in"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.buyPrice}
+                    onChange={(event) =>
+                      setFormField("buyPrice", Number(event.target.value))
                     }
                   />
                 </label>
@@ -623,7 +655,9 @@ export function InventoryPage() {
                     <tr>
                       <th>Product</th>
                       <th>SKU</th>
+                      <th>MRP</th>
                       <th>Price</th>
+                      <th>Buy</th>
                       <th>Tax</th>
                       <th>Stock</th>
                       <th>Adjust</th>
@@ -633,7 +667,7 @@ export function InventoryPage() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={7}>Loading inventory...</td>
+                        <td colSpan={9}>Loading inventory...</td>
                       </tr>
                     ) : products.length ? (
                       products.map((product) => (
@@ -645,7 +679,9 @@ export function InventoryPage() {
                             </span>
                           </td>
                           <td>{product.sku}</td>
+                          <td>{product.mrp ? formatMoney(product.mrp) : "—"}</td>
                           <td>{formatMoney(product.price)}</td>
+                          <td>{product.buyPrice ? formatMoney(product.buyPrice) : "—"}</td>
                           <td>{product.taxRate}%</td>
                           <td>
                             <span
@@ -693,7 +729,7 @@ export function InventoryPage() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <span className="inventory-empty">
                             <BoxesIcon aria-hidden="true" /> No products found
                           </span>
@@ -843,6 +879,19 @@ function ProductEditPopover({
             />
           </label>
           <label className="field">
+            <span className="field-label">MRP</span>
+            <Input
+              className="in"
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.mrp}
+              onChange={(event) =>
+                setDraftField("mrp", Number(event.target.value))
+              }
+            />
+          </label>
+          <label className="field">
             <span className="field-label">Price</span>
             <Input
               className="in"
@@ -852,6 +901,19 @@ function ProductEditPopover({
               value={draft.price}
               onChange={(event) =>
                 setDraftField("price", Number(event.target.value))
+              }
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Buy</span>
+            <Input
+              className="in"
+              type="number"
+              min="0"
+              step="0.01"
+              value={draft.buyPrice}
+              onChange={(event) =>
+                setDraftField("buyPrice", Number(event.target.value))
               }
             />
           </label>
@@ -916,6 +978,8 @@ function toProductForm(product: Product): ProductForm {
     description: product.description,
     sku: product.sku,
     price: product.price,
+    buyPrice: product.buyPrice || 0,
+    mrp: product.mrp,
     taxRate: product.taxRate,
     stockQty: product.stockQty,
     category: product.category,

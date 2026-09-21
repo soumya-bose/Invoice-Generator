@@ -13,43 +13,123 @@ type ImportFailure = {
 }
 
 const COLUMN_ALIASES: Record<string, string> = {
-  category: "category",
-  description: "description",
   name: "name",
-  price: "price",
+  productname: "name",
+  product: "name",
+  itemname: "name",
+  item: "name",
+  title: "name",
+
   sku: "sku",
+  code: "sku",
+  productcode: "sku",
+  itemcode: "sku",
+
+  description: "description",
+  desc: "description",
+  details: "description",
+
+  mrp: "mrp",
+  maximumretailprice: "mrp",
+  retailprice: "mrp",
+
+  price: "price",
+  sellingprice: "price",
+  saleprice: "price",
+  salesprice: "price",
+  unitprice: "price",
+  rate: "price",
+
+  buy: "buyPrice",
+  buyprice: "buyPrice",
+  purchaseprice: "buyPrice",
+  buyingprice: "buyPrice",
+  cost: "buyPrice",
+  costprice: "buyPrice",
+
+  tax: "taxRate",
+  taxrate: "taxRate",
+  gst: "taxRate",
+  gstrate: "taxRate",
+  vat: "taxRate",
+
   stock: "stockQty",
   stockqty: "stockQty",
   stockquantity: "stockQty",
-  tax: "taxRate",
-  taxrate: "taxRate",
+  qty: "stockQty",
+  quantity: "stockQty",
+  units: "stockQty",
+  available: "stockQty",
+  availablestock: "stockQty",
+
+  category: "category",
+  type: "category",
+  group: "category",
 }
 
 const SAMPLE_PRODUCTS = [
   {
-    name: "Desk Organizer",
-    sku: "STN-ORG-009",
-    description: "Multi-compartment organizer for desk supplies",
-    price: 599,
-    taxRate: 12,
-    stockQty: 34,
-    category: "Stationery",
+    "Product Name": "DOMS Aqua Colour Cakes 36 SHADES",
+    SKU: "DOMS Aqua 36",
+    Description: "36 shades watercolor cakes with nylon brush",
+    MRP: 200,
+    Price: 136,
+    "Buy Price": 95,
+    "Tax %": 18,
+    Stock: 25,
+    Category: "Stationery",
   },
   {
-    name: "Consulting Hour",
-    sku: "SRV-CON-010",
-    description: "Professional consulting service",
-    price: 2500,
-    taxRate: 18,
-    stockQty: 99,
-    category: "Services",
+    "Product Name": "Desk Organizer",
+    SKU: "STN-ORG-009",
+    Description: "Multi-compartment organizer for desk supplies",
+    MRP: 699,
+    Price: 599,
+    "Buy Price": 420,
+    "Tax %": 12,
+    Stock: 34,
+    Category: "Stationery",
+  },
+  {
+    "Product Name": "Office Ergonomic Chair",
+    SKU: "EGR-CHR-006",
+    Description: "High-back mesh ergonomic office chair",
+    MRP: 10999,
+    Price: 8999,
+    "Buy Price": 6500,
+    "Tax %": 18,
+    Stock: 7,
+    Category: "Furniture",
+  },
+  {
+    "Product Name": "Consulting Hour",
+    SKU: "SRV-CON-010",
+    Description: "Professional consulting service",
+    MRP: 3000,
+    Price: 2500,
+    "Buy Price": 1800,
+    "Tax %": 18,
+    Stock: 99,
+    Category: "Services",
   },
 ]
 
 export async function GET() {
   const worksheet = XLSX.utils.json_to_sheet(SAMPLE_PRODUCTS)
+  worksheet["!cols"] = [
+    { wch: 34 },
+    { wch: 16 },
+    { wch: 42 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 16 },
+  ]
+
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Products")
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory")
   const buffer = XLSX.write(workbook, {
     bookType: "xlsx",
     type: "buffer",
@@ -57,7 +137,7 @@ export async function GET() {
 
   return new Response(new Uint8Array(buffer), {
     headers: {
-      "Content-Disposition": 'attachment; filename="product-import-sample.xlsx"',
+      "Content-Disposition": 'attachment; filename="inventory-import-sample.xlsx"',
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     },
@@ -90,7 +170,7 @@ export async function POST(request: Request) {
       await Product.findOneAndUpdate(
         { sku: parsed.product.sku },
         { $set: parsed.product },
-        { new: true, upsert: true, runValidators: true }
+        { returnDocument: "after", upsert: true, runValidators: true }
       )
 
       if (existing) {
@@ -146,7 +226,7 @@ async function readRows(request: Request) {
 function normalizeRow(row: Record<string, unknown>) {
   return Object.entries(row).reduce<Record<string, unknown>>(
     (acc, [key, value]) => {
-      const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, "")
+      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, "")
       const target = COLUMN_ALIASES[normalizedKey]
       if (target) acc[target] = value
       return acc

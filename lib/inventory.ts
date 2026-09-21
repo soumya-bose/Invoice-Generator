@@ -8,6 +8,8 @@ export type ApiProduct = {
   description: string
   sku: string
   price: number
+  buyPrice?: number
+  mrp?: number
   taxRate: number
   stockQty: number
   category: string
@@ -20,6 +22,8 @@ export type ProductInput = {
   description: string
   sku: string
   price: number
+  buyPrice?: number
+  mrp?: number
   taxRate: number
   stockQty: number
   category: string
@@ -29,6 +33,7 @@ export type InvoiceItemInput = {
   description: string
   qty: number
   price: number
+  mrp?: number
   discount?: number
   taxRate: number
   taxMode: "exclusive" | "inclusive"
@@ -47,6 +52,10 @@ export function serializeProduct(product: ProductDocument): ApiProduct {
     description: product.description,
     sku: product.sku,
     price: product.price,
+    buyPrice: typeof (product as unknown as { buyPrice?: number }).buyPrice === "number"
+      ? (product as unknown as { buyPrice?: number }).buyPrice
+      : 0,
+    mrp: typeof product.mrp === "number" ? product.mrp : 0,
     taxRate: product.taxRate,
     stockQty: product.stockQty,
     category: product.category,
@@ -66,6 +75,8 @@ export function parseProductInput(value: unknown): {
     description: asString(record.description),
     sku: asString(record.sku),
     price: asNumber(record.price),
+    buyPrice: asNumber(record.buyPrice ?? record.buy, 0),
+    mrp: asNumber(record.mrp, 0),
     taxRate: asNumber(record.taxRate),
     stockQty: asNumber(record.stockQty),
     category: asString(record.category),
@@ -76,6 +87,12 @@ export function parseProductInput(value: unknown): {
   if (!product.sku) errors.push("sku is required")
   if (!Number.isFinite(product.price) || product.price < 0) {
     errors.push("price must be a non-negative number")
+  }
+  if (!Number.isFinite(product.buyPrice) || product.buyPrice < 0) {
+    errors.push("buyPrice must be a non-negative number")
+  }
+  if (!Number.isFinite(product.mrp) || product.mrp < 0) {
+    errors.push("mrp must be a non-negative number")
   }
   if (!Number.isFinite(product.taxRate) || product.taxRate < 0) {
     errors.push("taxRate must be a non-negative number")
@@ -103,6 +120,7 @@ export function normalizeInvoiceItems(value: unknown): {
       description: asString(record.description),
       qty: asNumber(record.qty),
       price: asNumber(record.price),
+      mrp: asNumber(record.mrp, 0),
       discount: asNumber(record.discount),
       taxRate: asNumber(record.taxRate),
       taxMode,
@@ -131,14 +149,21 @@ export function normalizeInvoiceItems(value: unknown): {
   return { errors, items }
 }
 
-export function buildStockRequirements(items: InvoiceItemInput[]) {
+export function buildStockRequirements(
+  items: Array<{ productId?: unknown; qty?: unknown }>
+) {
   const requirements = new Map<string, number>()
 
   items.forEach((item) => {
-    if (!item.productId) return
+    if (!item?.productId) return
+    const productId = String(item.productId).trim()
+    if (!productId || productId === "undefined") return
+    const qty = Number(item.qty) || 0
+    if (qty <= 0) return
+
     requirements.set(
-      item.productId,
-      (requirements.get(item.productId) ?? 0) + item.qty
+      productId,
+      (requirements.get(productId) ?? 0) + qty
     )
   })
 
@@ -155,7 +180,7 @@ export async function reserveStock(requirements: Map<string, number>) {
         stockQty: { $gte: qty },
       },
       { $inc: { stockQty: -qty } },
-      { new: true }
+      { returnDocument: "after" }
     )
 
     if (!product) {
@@ -186,14 +211,77 @@ export async function rollbackStock(
   )
 }
 
+export async function restoreInvoiceStock(
+  items: Array<{ productId?: unknown; qty?: unknown }>
+) {
+  const requirements = buildStockRequirements(items)
+  const toRollback = Array.from(requirements.entries()).map(
+    ([productId, qty]) => ({ productId, qty })
+  )
+  if (toRollback.length) {
+    await rollbackStock(toRollback)
+  }
+}
+
+export async function reconcileInvoiceStock(
+  oldItems: Array<{ productId?: unknown; qty?: unknown }>,
+  newItems: Array<{ productId?: unknown; qty?: unknown }>
+) {
+  const oldRequirements = buildStockRequirements(oldItems)
+  const newRequirements = buildStockRequirements(newItems)
+
+  const productIds = new Set([
+    ...oldRequirements.keys(),
+    ...newRequirements.keys(),
+  ])
+
+  const toReserve = new Map<string, number>()
+  const toReturn: Array<{ productId: string; qty: number }> = []
+
+  for (const productId of productIds) {
+    const oldQty = oldRequirements.get(productId) || 0
+    const newQty = newRequirements.get(productId) || 0
+    const diff = newQty - oldQty
+
+    if (diff > 0) {
+      toReserve.set(productId, diff)
+    } else if (diff < 0) {
+      toReturn.push({ productId, qty: Math.abs(diff) })
+    }
+  }
+
+  // Restore returned stock
+  if (toReturn.length) {
+    await rollbackStock(toReturn)
+  }
+
+  // Reserve additional stock
+  if (toReserve.size) {
+    try {
+      await reserveStock(toReserve)
+    } catch (reserveError) {
+      // Revert returned stock so state is restored if reservation fails
+      if (toReturn.length) {
+        for (const ret of toReturn) {
+          await Product.findByIdAndUpdate(ret.productId, {
+            $inc: { stockQty: -ret.qty },
+          })
+        }
+      }
+      throw reserveError
+    }
+  }
+}
+
 function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : ""
 }
 
-function asNumber(value: unknown) {
-  if (typeof value === "number") return value
+function asNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value
   if (typeof value === "string" && value.trim() !== "") {
-    return Number(value)
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
   }
-  return 0
+  return fallback
 }

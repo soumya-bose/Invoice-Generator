@@ -24,7 +24,7 @@ export async function PATCH(
     }
 
     const product = await Product.findByIdAndUpdate(id, parsed.product, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     })
 

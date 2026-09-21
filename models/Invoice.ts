@@ -5,6 +5,7 @@ const invoiceItemSchema = new Schema(
     description: { type: String, required: true, trim: true },
     qty: { type: Number, required: true, min: 0 },
     price: { type: Number, required: true, min: 0 },
+    mrp: { type: Number, default: 0, min: 0 },
     discount: { type: Number, default: 0, min: 0 },
     taxRate: { type: Number, required: true, min: 0 },
     taxMode: {
