@@ -1,3 +1,4 @@
+import { Types } from "mongoose"
 import { type NextRequest } from "next/server"
 
 import { parseProductInput, serializeProduct } from "@/lib/inventory"
@@ -84,3 +85,44 @@ export async function POST(request: Request) {
     return Response.json(body, { status })
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json().catch(() => null)
+    const ids = Array.isArray(body?.ids)
+      ? body.ids.filter(
+          (id: unknown) => typeof id === "string" && Types.ObjectId.isValid(id)
+        )
+      : []
+
+    if (!ids.length) {
+      return Response.json(
+        { error: "No valid product IDs provided for deletion" },
+        { status: 400 }
+      )
+    }
+
+    if (!process.env.MONGODB_URI) {
+      return Response.json({
+        success: true,
+        offline: true,
+        deletedCount: ids.length,
+        message: `${ids.length} product(s) deleted (offline mode)`,
+      })
+    }
+
+    await connectMongo()
+
+    const result = await Product.deleteMany({ _id: { $in: ids } })
+
+    return Response.json({
+      success: true,
+      deletedCount: result.deletedCount,
+      message: `${result.deletedCount} product(s) deleted successfully`,
+    })
+  } catch (error) {
+    const { body, status } = toApiError(error)
+    return Response.json(body, { status })
+  }
+}
+

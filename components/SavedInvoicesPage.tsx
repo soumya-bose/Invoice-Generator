@@ -397,8 +397,12 @@ export function SavedInvoicesPage() {
                       ) : (
                         <Button
                           type="button"
-                          variant="outline"
-                          style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                          style={{
+                            background: "#ef4444",
+                            color: "#ffffff",
+                            border: "none",
+                            padding: "0 0.75rem",
+                          }}
                           onClick={() => {
                             setError("")
                             setNotice("")

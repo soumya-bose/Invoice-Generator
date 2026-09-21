@@ -50,3 +50,39 @@ export async function PATCH(
     return Response.json(body, { status })
   }
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    if (!Types.ObjectId.isValid(id)) {
+      return Response.json({ error: "Invalid product id" }, { status: 400 })
+    }
+
+    if (!process.env.MONGODB_URI) {
+      return Response.json({
+        success: true,
+        offline: true,
+        message: "Product deleted (offline mode)",
+      })
+    }
+
+    await connectMongo()
+
+    const product = await Product.findByIdAndDelete(id)
+    if (!product) {
+      return Response.json({ error: "Product not found" }, { status: 404 })
+    }
+
+    return Response.json({
+      success: true,
+      message: `Product "${product.name}" deleted successfully`,
+    })
+  } catch (error) {
+    const { body, status } = toApiError(error)
+    return Response.json(body, { status })
+  }
+}
+

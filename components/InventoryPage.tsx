@@ -18,10 +18,12 @@ import {
   RefreshCcwIcon,
   SaveIcon,
   SearchIcon,
+  Trash2Icon,
   UploadIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DashboardFrame } from "@/components/DashboardFrame"
 import { MobileNavigation } from "@/components/MobileNavigation"
 import { ThemeToggle } from "@/components/theme-provider"
@@ -82,6 +84,11 @@ export function InventoryPage() {
   const [importing, setImporting] = useState(false)
   const [seeding, setSeeding] = useState(false)
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
   const totals = useMemo(() => {
@@ -283,6 +290,119 @@ export function InventoryPage() {
     },
     [editingId]
   )
+
+  const deleteProduct = useCallback(
+    async (product: Product) => {
+      setDeletingId(product._id)
+      setError("")
+      setMessage("")
+
+      try {
+        const response = await fetch(`/api/products/${product._id}`, {
+          method: "DELETE",
+        })
+        const data = (await response.json().catch(() => null)) as {
+          message?: string
+          error?: string
+        } | null
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Unable to delete product")
+        }
+
+        setMessage(
+          data?.message || `Product "${product.name}" deleted successfully`
+        )
+        setConfirmDeleteId(null)
+        if (editingId === product._id) {
+          startCreate()
+        }
+        await loadProducts()
+      } catch (deleteError) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Unable to delete product"
+        )
+      } finally {
+        setDeletingId(null)
+      }
+    },
+    [editingId, loadProducts, startCreate]
+  )
+
+  const allOnPageSelected = useMemo(() => {
+    return (
+      products.length > 0 &&
+      products.every((p) => selectedIds.includes(p._id))
+    )
+  }, [products, selectedIds])
+
+  const someOnPageSelected = useMemo(() => {
+    return (
+      products.some((p) => selectedIds.includes(p._id)) && !allOnPageSelected
+    )
+  }, [products, selectedIds, allOnPageSelected])
+
+  const toggleSelectAllPage = useCallback(() => {
+    if (allOnPageSelected) {
+      const pageIds = new Set(products.map((p) => p._id))
+      setSelectedIds((current) => current.filter((id) => !pageIds.has(id)))
+    } else {
+      const combined = new Set([...selectedIds, ...products.map((p) => p._id)])
+      setSelectedIds(Array.from(combined))
+    }
+  }, [allOnPageSelected, products, selectedIds])
+
+  const toggleSelectProduct = useCallback((id: string) => {
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    )
+  }, [])
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([])
+    setConfirmBulkDelete(false)
+  }, [])
+
+  const handleBulkDelete = useCallback(async () => {
+    if (!selectedIds.length) return
+    setBulkDeleting(true)
+    setError("")
+    setMessage("")
+
+    try {
+      const response = await fetch("/api/products", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      const data = (await response.json().catch(() => null)) as {
+        message?: string
+        deletedCount?: number
+        error?: string
+      } | null
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Bulk deletion failed")
+      }
+
+      setMessage(
+        data?.message || `${selectedIds.length} product(s) deleted successfully`
+      )
+      setSelectedIds([])
+      setConfirmBulkDelete(false)
+      await loadProducts()
+    } catch (bulkError) {
+      setError(
+        bulkError instanceof Error ? bulkError.message : "Bulk deletion failed"
+      )
+    } finally {
+      setBulkDeleting(false)
+    }
+  }, [loadProducts, selectedIds])
 
   const handleImport = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -570,6 +690,25 @@ export function InventoryPage() {
                 >
                   <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
                 </Button>
+                {editingId && (
+                  <Button
+                    className="btn-import"
+                    type="button"
+                    style={{
+                      background: "#ef4444",
+                      color: "#ffffff",
+                      border: "none",
+                      padding: "0 0.75rem",
+                    }}
+                    onClick={() => {
+                      const prod = products.find((p) => p._id === editingId)
+                      if (prod) void deleteProduct(prod)
+                    }}
+                    disabled={deletingId === editingId}
+                  >
+                    <Trash2Icon aria-hidden="true" /> {deletingId === editingId ? "Deleting..." : "Delete"}
+                  </Button>
+                )}
                 <input
                   ref={importInputRef}
                   className="sr-only"
@@ -649,11 +788,98 @@ export function InventoryPage() {
                 </div>
               </div>
 
+              {selectedIds.length > 0 && (
+                <div className="inventory-bulk-bar">
+                  <div className="inventory-bulk-info">
+                    <span className="inventory-bulk-count">
+                      {selectedIds.length} selected
+                    </span>
+                    <Button
+                      className="btn-ghost"
+                      type="button"
+                      size="sm"
+                      onClick={toggleSelectAllPage}
+                    >
+                      {allOnPageSelected ? "Deselect page" : "Select page"}
+                    </Button>
+                    <Button
+                      className="btn-ghost"
+                      type="button"
+                      size="sm"
+                      onClick={clearSelection}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className="inventory-bulk-actions">
+                    {confirmBulkDelete ? (
+                      <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.825rem", color: "#ef4444", fontWeight: 600 }}>
+                          Delete {selectedIds.length} product{selectedIds.length > 1 ? "s" : ""}?
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          style={{
+                            background: "#ef4444",
+                            color: "#ffffff",
+                            border: "none",
+                            height: "2rem",
+                            fontWeight: 600,
+                            padding: "0 0.75rem",
+                          }}
+                          onClick={() => void handleBulkDelete()}
+                          disabled={bulkDeleting}
+                        >
+                          {bulkDeleting ? "Deleting..." : "Confirm Delete"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          style={{ height: "2rem" }}
+                          onClick={() => setConfirmBulkDelete(false)}
+                          disabled={bulkDeleting}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        style={{
+                          background: "#ef4444",
+                          color: "#ffffff",
+                          border: "none",
+                          height: "2rem",
+                          fontWeight: 600,
+                          padding: "0 0.75rem",
+                        }}
+                        onClick={() => setConfirmBulkDelete(true)}
+                      >
+                        <Trash2Icon aria-hidden="true" style={{ width: 14, height: 14 }} /> Bulk Delete ({selectedIds.length})
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="inventory-table-wrap">
                 <table className="inventory-table">
                   <thead>
                     <tr>
-                      <th>Product</th>
+                      <th className="inventory-col-product">
+                        <div className="inventory-th-product">
+                          <Checkbox
+                            checked={allOnPageSelected}
+                            indeterminate={someOnPageSelected}
+                            onCheckedChange={toggleSelectAllPage}
+                            aria-label="Select all products on page"
+                          />
+                          <span>Product</span>
+                        </div>
+                      </th>
                       <th>SKU</th>
                       <th>MRP</th>
                       <th>Price</th>
@@ -661,7 +887,7 @@ export function InventoryPage() {
                       <th>Tax</th>
                       <th>Stock</th>
                       <th>Adjust</th>
-                      <th />
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -671,12 +897,30 @@ export function InventoryPage() {
                       </tr>
                     ) : products.length ? (
                       products.map((product) => (
-                        <tr key={product._id}>
-                          <td>
-                            <strong>{product.name}</strong>
-                            <span>
-                              {product.category || product.description}
-                            </span>
+                        <tr
+                          key={product._id}
+                          className={
+                            selectedIds.includes(product._id)
+                              ? "is-selected"
+                              : undefined
+                          }
+                        >
+                          <td className="inventory-col-product">
+                            <div className="inventory-row-product">
+                              <Checkbox
+                                checked={selectedIds.includes(product._id)}
+                                onCheckedChange={() =>
+                                  toggleSelectProduct(product._id)
+                                }
+                                aria-label={`Select ${product.name}`}
+                              />
+                              <div className="inventory-product-meta">
+                                <strong>{product.name}</strong>
+                                <span>
+                                  {product.category || product.description}
+                                </span>
+                              </div>
+                            </div>
                           </td>
                           <td>{product.sku}</td>
                           <td>{product.mrp ? formatMoney(product.mrp) : "—"}</td>
@@ -718,18 +962,70 @@ export function InventoryPage() {
                             </div>
                           </td>
                           <td>
-                            <ProductEditPopover
-                              product={product}
-                              onSave={(nextForm) =>
-                                persistProduct(product._id, nextForm)
-                              }
-                            />
+                            <div style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                              <ProductEditPopover
+                                product={product}
+                                onSave={(nextForm) =>
+                                  persistProduct(product._id, nextForm)
+                                }
+                                onDelete={() => deleteProduct(product)}
+                              />
+                              {confirmDeleteId === product._id ? (
+                                <div style={{ display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    style={{
+                                      background: "#ef4444",
+                                      color: "#ffffff",
+                                      border: "none",
+                                      padding: "0 0.5rem",
+                                      height: "1.75rem",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                    }}
+                                    onClick={() => void deleteProduct(product)}
+                                    disabled={deletingId === product._id}
+                                  >
+                                    {deletingId === product._id ? "..." : "Delete"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    style={{ height: "1.75rem", padding: "0 0.4rem", fontSize: "0.75rem" }}
+                                    onClick={() => setConfirmDeleteId(null)}
+                                    disabled={deletingId === product._id}
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="icon-sm"
+                                  style={{
+                                    background: "#ef4444",
+                                    color: "#ffffff",
+                                    border: "none",
+                                    padding: "0 0.5rem",
+                                  }}
+                                  onClick={() => {
+                                    setError("")
+                                    setMessage("")
+                                    setConfirmDeleteId(product._id)
+                                  }}
+                                  aria-label={`Delete ${product.name}`}
+                                >
+                                  <Trash2Icon aria-hidden="true" style={{ width: 14, height: 14 }} />
+                                </Button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <span className="inventory-empty">
                             <BoxesIcon aria-hidden="true" /> No products found
                           </span>
@@ -787,19 +1083,24 @@ function formatMoney(value: number) {
 
 function ProductEditPopover({
   onSave,
+  onDelete,
   product,
 }: {
   onSave: (form: ProductForm) => Promise<Product>
+  onDelete?: () => Promise<void>
   product: Product
 }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [draft, setDraft] = useState<ProductForm>(() => toProductForm(product))
   const [error, setError] = useState("")
 
   useEffect(() => {
     if (open) {
       setDraft(toProductForm(product))
+      setConfirmDelete(false)
       setError("")
     }
   }, [open, product])
@@ -949,15 +1250,60 @@ function ProductEditPopover({
             className="btn-primary"
             type="button"
             onClick={saveDraft}
-            disabled={saving}
+            disabled={saving || deleting}
           >
             <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
           </Button>
+          {onDelete && (
+            confirmDelete ? (
+              <Button
+                type="button"
+                style={{
+                  background: "#ef4444",
+                  color: "#ffffff",
+                  border: "none",
+                }}
+                onClick={async () => {
+                  setDeleting(true)
+                  try {
+                    await onDelete()
+                    setOpen(false)
+                  } catch (err) {
+                    setError(
+                      err instanceof Error ? err.message : "Delete failed"
+                    )
+                  } finally {
+                    setDeleting(false)
+                  }
+                }}
+                disabled={deleting}
+              >
+                <Trash2Icon aria-hidden="true" /> {deleting ? "Deleting..." : "Confirm Delete"}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                style={{
+                  background: "#ef4444",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "0 0.75rem",
+                }}
+                onClick={() => setConfirmDelete(true)}
+                disabled={saving}
+              >
+                <Trash2Icon aria-hidden="true" /> Delete
+              </Button>
+            )
+          )}
           <Button
             className="btn-import"
             type="button"
             variant="outline"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              setConfirmDelete(false)
+              setOpen(false)
+            }}
           >
             Cancel
           </Button>
