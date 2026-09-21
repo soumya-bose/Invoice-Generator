@@ -107,6 +107,10 @@ export function InventoryPage() {
   const loadProducts = useCallback(async () => {
     setLoading(true)
     setError("")
+    // Fix #7: Clear selections on every load — avoids ghost IDs from a previous
+    // page or search carrying over into bulk-delete operations
+    setSelectedIds([])
+    setConfirmBulkDelete(false)
 
     try {
       const params = new URLSearchParams({
@@ -146,6 +150,13 @@ export function InventoryPage() {
 
     return () => window.clearTimeout(timer)
   }, [loadProducts])
+
+  // Fix #13: Auto-dismiss success messages after 5 s
+  useEffect(() => {
+    if (!message) return
+    const t = window.setTimeout(() => setMessage(""), 5000)
+    return () => window.clearTimeout(t)
+  }, [message])
 
   const totalPages = Math.max(1, Math.ceil(totalProducts / PAGE_SIZE))
   const firstVisibleProduct = totalProducts ? (page - 1) * PAGE_SIZE + 1 : 0
@@ -314,6 +325,8 @@ export function InventoryPage() {
           data?.message || `Product "${product.name}" deleted successfully`
         )
         setConfirmDeleteId(null)
+        // Fix #16: Remove from selection so it can't be bulk-deleted again
+        setSelectedIds((current) => current.filter((id) => id !== product._id))
         if (editingId === product._id) {
           startCreate()
         }
@@ -544,16 +557,17 @@ export function InventoryPage() {
               <span>Products</span>
               <strong>{totalProducts}</strong>
             </div>
-            <div>
-              <span>Units</span>
+            {/* Fix #19: These three stats reflect only the current page of results */}
+            <div title="Units on this page">
+              <span>Units <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
               <strong>{totals.units}</strong>
             </div>
-            <div>
-              <span>Value</span>
+            <div title="Stock value on this page">
+              <span>Value <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
               <strong>{formatMoney(totals.value)}</strong>
             </div>
-            <div>
-              <span>Out</span>
+            <div title="Out-of-stock on this page">
+              <span>Out <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
               <strong>{totals.out}</strong>
             </div>
           </section>

@@ -493,7 +493,10 @@ function numberToWords(value: number): string {
   }
 
   const whole = Math.max(0, Math.floor(value))
-  if (whole === 0) return "Zero"
+  // Fix #20: Handle decimal portion (cents / paise) up to 2 decimal places
+  const cents = Math.round((value - whole) * 100)
+
+  if (whole === 0 && cents === 0) return "Zero"
 
   const scales = [
     { value: 1_000_000_000, label: "Billion" },
@@ -512,7 +515,11 @@ function numberToWords(value: number): string {
 
   if (remainder) parts.push(belowThousand(remainder))
 
-  return parts.join(" ")
+  const wholePart = whole === 0 ? "Zero" : parts.join(" ")
+  if (cents > 0) {
+    return `${wholePart} and ${cents.toString().padStart(2, "0")}/100`
+  }
+  return wholePart
 }
 
 export default function App() {
@@ -984,8 +991,11 @@ export default function App() {
       return
     }
 
+    // Hoist these so they are accessible after the try/catch (e.g. in localStorage save)
+    let returnedId: string | undefined = state.invoiceId
+    const isEditing = Boolean(state.invoiceId)
+
     try {
-      const isEditing = Boolean(state.invoiceId)
       const url = isEditing
         ? `/api/invoices/${encodeURIComponent(state.invoiceId!)}`
         : "/api/invoices"
@@ -1033,36 +1043,50 @@ export default function App() {
         )
       }
 
-      const returnedId = data?.invoice?._id
+      returnedId = data?.invoice?._id
         ? String(data.invoice._id)
         : state.invoiceId
 
+      // Fix #14: Only decrement local productStockQty on new invoices (POST).
+      // For edits (PUT) the server already reconciled the delta atomically —
+      // decrementing here would double-count the change.
       const reductions = new Map<string, number>()
-      state.items.forEach((item) => {
-        if (!item.productId) return
-        reductions.set(
-          item.productId,
-          (reductions.get(item.productId) ?? 0) + Number(item.qty || 0)
-        )
+      if (!isEditing) {
+        state.items.forEach((item) => {
+          if (!item.productId) return
+          reductions.set(
+            item.productId,
+            (reductions.get(item.productId) ?? 0) + Number(item.qty || 0)
+          )
+        })
+      }
+
+      const updatedItems = state.items.map((item) => {
+        if (
+          isEditing ||
+          !item.productId ||
+          typeof item.productStockQty !== "number"
+        ) {
+          return item
+        }
+        return {
+          ...item,
+          productStockQty: Math.max(
+            0,
+            item.productStockQty - (reductions.get(item.productId) ?? 0)
+          ),
+        }
       })
 
       setState((s) => ({
         ...s,
         invoiceId: returnedId,
         items: s.items.map((item) => {
-          if (!item.productId || typeof item.productStockQty !== "number") {
-            return item
-          }
-
-          return {
-            ...item,
-            productStockQty: Math.max(
-              0,
-              item.productStockQty - (reductions.get(item.productId) ?? 0)
-            ),
-          }
+          const updated = updatedItems.find((u) => u.id === item.id)
+          return updated ?? item
         }),
       }))
+
     } catch (error) {
       setInvoiceError(
         error instanceof Error ? error.message : "Invoice save failed"
@@ -1075,7 +1099,12 @@ export default function App() {
     setShowReceiptPrinter(true)
 
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+      // Fix #6: Include the updated invoiceId explicitly — setState is async so
+      // `state` here may still hold the old value before setState flushes.
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ ...state, invoiceId: returnedId ?? state.invoiceId })
+      )
     } catch {
       /* ignore quota errors */
     }

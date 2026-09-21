@@ -32,7 +32,7 @@ export async function PATCH(
           : {}),
       },
       update,
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     )
 
     if (!product) {

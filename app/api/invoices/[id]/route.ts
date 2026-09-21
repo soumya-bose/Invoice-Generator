@@ -41,7 +41,14 @@ export async function PUT(
     return Response.json({ error: "Invalid invoice id" }, { status: 400 })
   }
 
-  const body = await request.json()
+  // Fix #10: Parse body inside try to handle malformed JSON gracefully
+  let body: Record<string, unknown>
+  try {
+    body = (await request.json()) as Record<string, unknown>
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
   const { errors, items } = normalizeInvoiceItems(body.items)
 
   if (errors.length) {
@@ -99,9 +106,16 @@ export async function PUT(
       return Response.json({ error: "Invoice not found" }, { status: 404 })
     }
 
-    // Reconcile stock difference between old and new items
-    await reconcileInvoiceStock(existingInvoice.items, items)
+    // Fix #1: Capture old items BEFORE any mutation so we can rollback if save() fails
+    const oldItems = existingInvoice.items.map((i: { productId?: unknown; qty: number }) => ({
+      productId: i.productId,
+      qty: i.qty,
+    }))
 
+    // Reconcile stock (may throw if insufficient stock)
+    await reconcileInvoiceStock(oldItems, items)
+
+    // Update invoice fields
     existingInvoice.invoiceNumber = invoiceNumber
     existingInvoice.clientName = clientName
     existingInvoice.issueDate = issueDate
@@ -115,7 +129,17 @@ export async function PUT(
     existingInvoice.taxAmount = asNumber(body.taxAmount)
     existingInvoice.total = asNumber(body.total)
 
-    await existingInvoice.save()
+    try {
+      await existingInvoice.save()
+    } catch (saveError) {
+      // Fix #1: save() failed — undo the stock reconciliation (reverse: new→old)
+      try {
+        await reconcileInvoiceStock(items, oldItems)
+      } catch {
+        // Best-effort rollback; can't recover further here
+      }
+      throw saveError
+    }
 
     return Response.json({
       invoice: serializeInvoice(existingInvoice),
@@ -165,15 +189,16 @@ export async function DELETE(
   try {
     await connectMongo()
 
-    const invoice = await Invoice.findById(id)
+    // Fix #2: Delete the invoice FIRST — if stock restore fails afterward the
+    // invoice is still gone, which is the desired outcome. The reverse order
+    // (restore then delete) risks permanently over-counting stock if delete fails.
+    const invoice = await Invoice.findByIdAndDelete(id)
     if (!invoice) {
       return Response.json({ error: "Invoice not found" }, { status: 404 })
     }
 
-    // Restore stock for all products in this invoice
+    // Restore stock after the invoice is confirmed deleted
     await restoreInvoiceStock(invoice.items)
-
-    await Invoice.findByIdAndDelete(id)
 
     return Response.json({
       success: true,

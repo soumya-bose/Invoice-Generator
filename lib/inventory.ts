@@ -52,9 +52,8 @@ export function serializeProduct(product: ProductDocument): ApiProduct {
     description: product.description,
     sku: product.sku,
     price: product.price,
-    buyPrice: typeof (product as unknown as { buyPrice?: number }).buyPrice === "number"
-      ? (product as unknown as { buyPrice?: number }).buyPrice
-      : 0,
+    // Fix #15: buyPrice is part of InferSchemaType — no double-cast needed
+    buyPrice: typeof product.buyPrice === "number" ? product.buyPrice : 0,
     mrp: typeof product.mrp === "number" ? product.mrp : 0,
     taxRate: product.taxRate,
     stockQty: product.stockQty,

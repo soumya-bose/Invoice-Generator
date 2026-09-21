@@ -11,6 +11,11 @@ import { type NextRequest } from "next/server"
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
+  // Fix #4: Offline fallback for GET — previously threw 500 without MongoDB
+  if (!process.env.MONGODB_URI) {
+    return Response.json({ invoices: [], total: 0, page: 1, pageSize: 50, offline: true })
+  }
+
   try {
     await connectMongo()
 
@@ -50,9 +55,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: Request) {
+  // Fix #9: Parse body inside try to handle malformed JSON gracefully
+  let body: Record<string, unknown>
+  try {
+    body = (await request.json()) as Record<string, unknown>
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 })
+  }
+
   let reserved: Array<{ productId: string; qty: number }> = []
 
-  const body = await request.json()
   const { errors, items } = normalizeInvoiceItems(body.items)
 
   if (errors.length) {
@@ -76,8 +88,6 @@ export async function POST(request: Request) {
   }
 
   // --- No-database (offline) mode ---
-  // If MONGODB_URI is not configured, skip DB operations and return a
-  // synthetic success response so invoices can still be generated and printed.
   if (!process.env.MONGODB_URI) {
     const syntheticId = `local-${Date.now()}`
     return Response.json(

@@ -176,6 +176,13 @@ export function SavedInvoicesPage() {
     void loadInvoices()
   }, [loadInvoices])
 
+  // Fix #12: Auto-dismiss success notice after 5 s
+  useEffect(() => {
+    if (!notice) return
+    const t = window.setTimeout(() => setNotice(""), 5000)
+    return () => window.clearTimeout(t)
+  }, [notice])
+
   const viewInvoice = useCallback(
     (invoice: SavedInvoice) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toInvoiceState(invoice)))
@@ -520,8 +527,9 @@ function isTaxMode(value: unknown): value is TaxMode {
   return value === "exclusive" || value === "inclusive"
 }
 
+// Fix #18: trim() added to match server-side asString and avoid leading/trailing whitespace in displayed fields
 function asString(value: unknown, fallback = "") {
-  return typeof value === "string" ? value : fallback
+  return typeof value === "string" ? value.trim() || fallback : fallback
 }
 
 function asNumber(value: unknown, fallback = 0) {

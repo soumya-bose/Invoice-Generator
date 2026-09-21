@@ -166,14 +166,17 @@ export async function POST(request: Request) {
         continue
       }
 
-      const existing = await Product.exists({ sku: parsed.product.sku })
-      await Product.findOneAndUpdate(
+      // Fix #11: Use upsert result to detect insert vs update atomically.
+      // findOneAndUpdate returns null when upserting a NEW document (Mongoose
+      // quirk with returnDocument:"before" default), avoiding the TOCTOU race
+      // of a separate exists() call.
+      const existingDoc = await Product.findOneAndUpdate(
         { sku: parsed.product.sku },
         { $set: parsed.product },
-        { returnDocument: "after", upsert: true, runValidators: true }
+        { returnDocument: "before", upsert: true, runValidators: true }
       )
 
-      if (existing) {
+      if (existingDoc) {
         updated += 1
       } else {
         inserted += 1

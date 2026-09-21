@@ -12,14 +12,14 @@ export async function POST() {
     let updated = 0
 
     for (const product of DEMO_PRODUCTS) {
-      const existing = await Product.exists({ sku: product.sku })
-      await Product.findOneAndUpdate(
+      // Fix #11: Detect insert vs update atomically using upsert result
+      const existingDoc = await Product.findOneAndUpdate(
         { sku: product.sku },
         { $set: product },
-        { new: true, upsert: true, runValidators: true }
+        { returnDocument: "before", upsert: true, runValidators: true }
       )
 
-      if (existing) {
+      if (existingDoc) {
         updated += 1
       } else {
         inserted += 1
