@@ -313,7 +313,9 @@ export function DashboardPage() {
               <SparklesIcon aria-hidden="true" />
             </div>
             <div className="dashboard-insight-copy">
-              <Badge variant="outline">Workflow ready</Badge>
+              <Badge className="dashboard-workflow-badge" variant="outline">
+                Workflow ready
+              </Badge>
               <strong>Everything you need to send the next invoice.</strong>
               <span>
                 Connect your product catalog and keep client details close at

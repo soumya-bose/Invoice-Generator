@@ -3573,6 +3573,11 @@ body {
   min-width: 0;
 }
 
+.dashboard-workflow-badge {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
 .dashboard-insight-copy strong {
   color: var(--text);
   font-size: 0.82rem;
