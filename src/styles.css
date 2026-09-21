@@ -1951,7 +1951,6 @@ body {
 .tax-invoice-template {
   display: none;
   width: min(100%, 900px);
-  aspect-ratio: 210 / 297;
   margin: 0 auto;
   border: 2px solid #111;
   background: #fff;
@@ -2218,7 +2217,7 @@ body {
 .tax-terms {
   display: grid;
   grid-template-columns: 1fr 280px;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 150px;
 }
 
@@ -4040,22 +4039,31 @@ body {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 0;
+    margin: 8mm 6mm;
   }
   html,
   body {
-    width: 210mm;
-    height: 297mm;
-    min-height: 297mm;
-    overflow: hidden;
-    background: #fff;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    background: #fff !important;
   }
-  .no-print {
-    display: none !important;
-  }
+  .no-print,
+  .dashboard-topbar,
+  .dashboard-sidebar,
+  [data-sidebar="sidebar"],
   .receipt-printer,
   .invoice-result-actions {
     display: none !important;
+  }
+  .dashboard-shell,
+  .dashboard-inset {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
   }
   .app,
   .main,
@@ -4076,58 +4084,60 @@ body {
     width: 100%;
   }
   .tax-invoice-template {
-    width: 190mm;
-    height: 277mm;
+    width: 100%;
+    max-width: 198mm;
+    height: auto;
     min-height: 0;
     box-sizing: border-box;
-    margin: 10mm auto;
-    overflow: hidden;
+    margin: 0 auto;
+    overflow: visible;
     box-shadow: none;
     border-radius: 0;
     padding: 0;
-    max-width: none;
     border: 0.35mm solid #111;
     color: #000;
     display: flex;
     flex-direction: column;
-    font-size: 8.8pt;
-    line-height: 1.14;
+    font-size: 8.5pt;
+    line-height: 1.12;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   .tax-head {
-    flex: 0 0 34mm;
+    flex: 0 0 auto;
     min-height: 0;
-    padding: 4.3mm 6mm 3.2mm;
+    padding: 3.5mm 5mm 2.5mm;
   }
   .tax-head h2 {
-    margin-bottom: 1.7mm;
-    font-size: 26pt;
+    margin-bottom: 1.2mm;
+    font-size: 24pt;
     font-weight: 900;
     line-height: 1;
   }
   .tax-business-address,
   .tax-contact-line {
-    font-size: 10.2pt;
-    line-height: 1.24;
+    font-size: 9.5pt;
+    line-height: 1.2;
   }
   .tax-contact-line {
-    margin-top: 1mm;
-    gap: 2.2mm;
+    margin-top: 0.8mm;
+    gap: 2mm;
   }
   .tax-contact-line i {
-    height: 4mm;
+    height: 3.5mm;
   }
   .tax-gstin {
-    font-size: 9pt;
+    font-size: 8.5pt;
   }
   .tax-title {
-    flex: 0 0 9.5mm;
+    flex: 0 0 auto;
     min-height: 0;
-    padding: 1.2mm 4mm;
-    font-size: 15.5pt;
+    padding: 1mm 4mm;
+    font-size: 14pt;
     font-weight: 900;
   }
   .tax-party-grid {
-    flex: 0 0 43mm;
+    flex: 0 0 auto;
     min-height: 0;
     overflow: hidden;
   }
@@ -4135,19 +4145,19 @@ body {
   .tax-details {
     min-height: 0;
     overflow: hidden;
-    padding: 3mm 5mm;
+    padding: 2.5mm 4mm;
   }
   .tax-bill-to h4 {
-    margin-bottom: 4.2mm;
-    font-size: 11pt;
+    margin-bottom: 2.5mm;
+    font-size: 10.5pt;
     font-weight: 900;
   }
   .tax-field-list {
-    gap: 1.45mm;
+    gap: 1.2mm;
   }
   .tax-field-list div {
     grid-template-columns: 20mm 4mm minmax(0, 1fr);
-    min-height: 3.9mm;
+    min-height: 3.6mm;
   }
   .tax-details .tax-field-list div {
     grid-template-columns: 23mm 4mm minmax(0, 1fr);
@@ -4159,12 +4169,12 @@ body {
   .tax-items th,
   .tax-items td {
     box-sizing: border-box;
-    height: 6.6mm;
-    padding: 0.8mm 1.5mm;
+    height: 5.8mm;
+    padding: 0.5mm 1.5mm;
   }
   .tax-items th {
-    height: 8mm;
-    font-size: 9pt;
+    height: 7mm;
+    font-size: 8.5pt;
     font-weight: 900;
   }
   .tax-items th:first-child,
@@ -4198,63 +4208,63 @@ body {
   }
   .tax-summary {
     grid-template-columns: 1fr 59mm;
-    flex: 0 0 32mm;
+    flex: 0 0 auto;
     min-height: 0;
     overflow: hidden;
   }
   .tax-summary-space {
-    padding: 4.2mm 5.8mm;
+    padding: 3mm 5mm;
   }
   .tax-summary-table div {
     grid-template-columns: 32mm 27mm;
-    height: 8mm;
+    height: 7mm;
     min-height: 0;
     box-sizing: border-box;
   }
   .tax-summary-table span,
   .tax-summary-table strong {
     min-width: 0;
-    padding: 1.15mm 2.2mm;
+    padding: 0.8mm 2mm;
     overflow: hidden;
     white-space: nowrap;
   }
   .tax-grand-total span,
   .tax-grand-total strong {
-    font-size: 9.8pt;
+    font-size: 9.2pt;
     font-weight: 900;
   }
   .tax-amount-words {
-    gap: 1.4mm;
+    gap: 1.2mm;
     max-width: none;
   }
   .tax-amount-words span {
-    font-size: 8.2pt;
+    font-size: 7.8pt;
   }
   .tax-amount-words strong {
-    font-size: 10.2pt;
-    line-height: 1.2;
+    font-size: 9.5pt;
+    line-height: 1.15;
   }
   .tax-terms {
     grid-template-columns: 1fr 59mm;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     min-height: 0;
   }
   .tax-terms-copy {
-    padding: 3.5mm 6mm;
+    padding: 2.5mm 5mm;
   }
   .tax-terms h4 {
-    margin-bottom: 2mm;
-    font-size: 11pt;
+    margin-bottom: 1.5mm;
+    font-size: 10pt;
     font-weight: 900;
   }
   .tax-terms ul {
-    padding-left: 5mm;
+    padding-left: 4.5mm;
   }
   .tax-terms li + li {
-    margin-top: 1mm;
+    margin-top: 0.8mm;
   }
   .tax-signature {
-    padding: 7mm 6mm 6mm;
+    padding: 5mm 5mm 4mm;
   }
   .tax-invoice-template {
     -webkit-print-color-adjust: exact;

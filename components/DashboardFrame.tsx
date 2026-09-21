@@ -24,9 +24,9 @@ export function DashboardFrame({
 
   return (
     <SidebarProvider className="dashboard-shell">
-      <DashboardSidebar pathname={pathname} />
+      <DashboardSidebar className="no-print" pathname={pathname} />
       <SidebarInset className="dashboard-inset">
-        <header className="dashboard-topbar">
+        <header className="dashboard-topbar no-print">
           <div className="dashboard-topbar-heading">
             <SidebarTrigger className="dashboard-menu-trigger" />
             <div>

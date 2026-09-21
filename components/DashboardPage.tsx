@@ -334,9 +334,15 @@ export function DashboardPage() {
   )
 }
 
-export function DashboardSidebar({ pathname }: { pathname: string }) {
+export function DashboardSidebar({
+  className,
+  pathname,
+}: {
+  className?: string
+  pathname: string
+}) {
   return (
-    <Sidebar className="dashboard-sidebar" collapsible="icon">
+    <Sidebar className={["dashboard-sidebar", className].filter(Boolean).join(" ")} collapsible="icon">
       <SidebarHeader className="dashboard-sidebar-header">
         <Link className="dashboard-brand" href="/">
           <Image
