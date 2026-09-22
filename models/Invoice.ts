@@ -14,6 +14,11 @@ const invoiceItemSchema = new Schema(
       enum: ["exclusive", "inclusive"],
       default: "exclusive",
     },
+    itemType: {
+      type: String,
+      enum: ["service", "product"],
+      default: "service",
+    },
     productId: { type: Schema.Types.ObjectId, ref: "Product" },
   },
   { _id: false }
@@ -57,5 +62,8 @@ export type InvoiceDocument = InferSchemaType<typeof invoiceSchema> & {
   _id: unknown
 }
 
-export const Invoice =
-  models.Invoice || model("Invoice", invoiceSchema)
+if (models.Invoice && !models.Invoice.schema.path("items.itemType")) {
+  delete (models as Record<string, unknown>).Invoice
+}
+
+export const Invoice = models.Invoice || model("Invoice", invoiceSchema)

@@ -37,14 +37,19 @@ export type InvoiceItemInput = {
   discount?: number
   taxRate: number
   taxMode: "exclusive" | "inclusive"
+  itemType: "service" | "product"
   productId?: string
 }
 
 export function serializeProduct(product: ProductDocument): ApiProduct {
   const createdAt =
-    product.createdAt instanceof Date ? product.createdAt.toISOString() : undefined
+    product.createdAt instanceof Date
+      ? product.createdAt.toISOString()
+      : undefined
   const updatedAt =
-    product.updatedAt instanceof Date ? product.updatedAt.toISOString() : undefined
+    product.updatedAt instanceof Date
+      ? product.updatedAt.toISOString()
+      : undefined
 
   return {
     _id: String(product._id),
@@ -113,8 +118,12 @@ export function normalizeInvoiceItems(value: unknown): {
 
   const errors: string[] = []
   const items = value.map((item, index) => {
-    const record = item && typeof item === "object" ? item as Record<string, unknown> : {}
+    const record =
+      item && typeof item === "object" ? (item as Record<string, unknown>) : {}
     const taxMode = record.taxMode === "inclusive" ? "inclusive" : "exclusive"
+    const productId = asString(record.productId) || undefined
+    const itemType =
+      record.itemType === "product" || productId ? "product" : "service"
     const normalized: InvoiceItemInput = {
       description: asString(record.description),
       qty: asNumber(record.qty),
@@ -123,7 +132,8 @@ export function normalizeInvoiceItems(value: unknown): {
       discount: asNumber(record.discount),
       taxRate: asNumber(record.taxRate),
       taxMode,
-      productId: asString(record.productId) || undefined,
+      itemType,
+      productId,
     }
 
     if (!normalized.description) {
@@ -160,10 +170,7 @@ export function buildStockRequirements(
     const qty = Number(item.qty) || 0
     if (qty <= 0) return
 
-    requirements.set(
-      productId,
-      (requirements.get(productId) ?? 0) + qty
-    )
+    requirements.set(productId, (requirements.get(productId) ?? 0) + qty)
   })
 
   return requirements

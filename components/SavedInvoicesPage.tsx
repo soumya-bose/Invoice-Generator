@@ -4,7 +4,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { CheckCircle2Icon, EyeIcon, PencilIcon, RefreshCcwIcon, Trash2Icon } from "lucide-react"
+import {
+  CheckCircle2Icon,
+  EyeIcon,
+  PencilIcon,
+  RefreshCcwIcon,
+  Trash2Icon,
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DashboardFrame } from "@/components/DashboardFrame"
@@ -31,9 +37,11 @@ type InvoiceItem = {
   description: string
   qty: number
   price: number
+  mrp?: number
   discount: number
   taxRate: number
   taxMode: TaxMode
+  itemType?: "service" | "product"
   productId?: string
   productSku?: string
   productStockQty?: number
@@ -67,9 +75,11 @@ type InvoiceState = {
   taxRate: number
   discount: number
   notes: string
+  lineItemType: "service" | "product"
 }
 
 const STORAGE_KEY = "invoice-generator-v1"
+const EDIT_INTENT_KEY = "invoice-generator-edit-intent-v1"
 const PAGE_SIZE = 10
 const CURRENCIES: CurrencyCode[] = [
   "USD",
@@ -122,6 +132,7 @@ const DEFAULT_STATE: InvoiceState = {
   taxRate: 0,
   discount: 0,
   notes: "Thank you for your business!",
+  lineItemType: "service",
 }
 
 let uid = 0
@@ -194,6 +205,7 @@ export function SavedInvoicesPage() {
   const editInvoice = useCallback(
     (invoice: SavedInvoice) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(toInvoiceState(invoice)))
+      sessionStorage.setItem(EDIT_INTENT_KEY, "1")
       router.push("/invoice/new")
     },
     [router]
@@ -325,7 +337,10 @@ export function SavedInvoicesPage() {
                   marginBottom: "1rem",
                 }}
               >
-                <CheckCircle2Icon aria-hidden="true" style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <CheckCircle2Icon
+                  aria-hidden="true"
+                  style={{ width: 16, height: 16, flexShrink: 0 }}
+                />
                 <span>{notice}</span>
               </div>
             )}
@@ -355,7 +370,14 @@ export function SavedInvoicesPage() {
                           : DEFAULT_STATE.meta.currency
                       )}
                     </b>
-                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.5rem",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
                       <Button
                         className="btn-import"
                         type="button"
@@ -373,7 +395,13 @@ export function SavedInvoicesPage() {
                         <PencilIcon aria-hidden="true" /> Edit
                       </Button>
                       {confirmDeleteId === invoice._id ? (
-                        <div style={{ display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            gap: "0.25rem",
+                            alignItems: "center",
+                          }}
+                        >
                           <Button
                             type="button"
                             size="sm"
@@ -388,7 +416,9 @@ export function SavedInvoicesPage() {
                             onClick={() => void handleDeleteInvoice(invoice)}
                             disabled={deletingId === invoice._id}
                           >
-                            {deletingId === invoice._id ? "Restoring..." : "Confirm"}
+                            {deletingId === invoice._id
+                              ? "Restoring..."
+                              : "Confirm"}
                           </Button>
                           <Button
                             type="button"
@@ -489,9 +519,14 @@ function toInvoiceState(invoice: SavedInvoice): InvoiceState {
             description: asString(item.description),
             qty: asNumber(item.qty, 1),
             price: asNumber(item.price),
+            mrp: asNumber(item.mrp),
             discount: asNumber(item.discount),
             taxRate: asNumber(item.taxRate),
             taxMode: isTaxMode(item.taxMode) ? item.taxMode : "exclusive",
+            itemType:
+              item.itemType === "product" || item.productId
+                ? "product"
+                : "service",
             productId: asString(item.productId) || undefined,
             productSku: asString(item.productSku) || undefined,
             productStockQty:
@@ -500,6 +535,11 @@ function toInvoiceState(invoice: SavedInvoice): InvoiceState {
                 : undefined,
           }))
         : DEFAULT_STATE.items.map((item) => ({ ...item, id: newId() })),
+    lineItemType: invoice.items?.some(
+      (item) => item.itemType === "product" || item.productId
+    )
+      ? "product"
+      : "service",
     notes: asString(invoice.notes, DEFAULT_STATE.notes),
   }
 }

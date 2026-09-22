@@ -4,7 +4,6 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  type ChangeEvent,
   type ReactNode,
   useState,
   useMemo,
@@ -12,7 +11,7 @@ import {
   useEffect,
   useRef,
 } from "react"
-import { CalendarIcon, ChevronDownIcon, UploadIcon } from "lucide-react"
+import { CalendarIcon, ChevronDownIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -117,6 +116,7 @@ type ProductSuggestion = {
   description: string
   sku: string
   price: number
+  buyPrice?: number
   mrp: number
   taxRate: number
   stockQty: number
@@ -128,12 +128,6 @@ type ProductSearchState = {
   loading: boolean
   products: ProductSuggestion[]
   query: string
-}
-
-type ImportSummary = {
-  inserted: number
-  updated: number
-  failed: number
 }
 
 const CURRENCIES: Array<{
@@ -152,6 +146,7 @@ const CURRENCIES: Array<{
 ]
 
 const STORAGE_KEY = "invoice-generator-v1"
+const EDIT_INTENT_KEY = "invoice-generator-edit-intent-v1"
 const TAX_OPTIONS = [0, 5, 8, 12, 18, 28]
 
 let uid = 0
@@ -393,6 +388,31 @@ function loadState(): InvoiceState {
   }
 }
 
+function createFreshState(): InvoiceState {
+  return {
+    ...DEFAULT_STATE,
+    invoiceId: undefined,
+    items: [
+      {
+        id: newId(),
+        description: "",
+        qty: 1,
+        price: 0,
+        mrp: 0,
+        discount: 0,
+        taxRate: 0,
+        taxMode: "exclusive",
+        itemType: "service",
+      },
+    ],
+    meta: {
+      ...DEFAULT_STATE.meta,
+      issueDate: todayISO(),
+      dueDate: plusDaysISO(14),
+    },
+  }
+}
+
 function formatMoney(value: number, currency: CurrencyCode) {
   const num = Number.isFinite(value) ? value : 0
   try {
@@ -544,21 +564,29 @@ export default function App() {
   })
   const [invoiceError, setInvoiceError] = useState("")
   const [isSavingInvoice, setIsSavingInvoice] = useState(false)
-  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null)
-  const [importError, setImportError] = useState("")
-  const [isImporting, setIsImporting] = useState(false)
-  const importInputRef = useRef<HTMLInputElement | null>(null)
   const generationTimers = useRef<number[]>([])
   const hydrationTimer = useRef<number | null>(null)
 
-  const { business, client, meta, items, notes, lineItemType = "service" } =
-    state
+  const { business, client, meta, items, notes } = state
   const isInvoiceRoute = pathname === "/invoice"
 
   useEffect(() => {
     hydrationTimer.current = window.setTimeout(() => {
+      const isEditIntent =
+        pathname === "/invoice/new" &&
+        sessionStorage.getItem(EDIT_INTENT_KEY) === "1"
+      if (pathname === "/invoice/new" && !isEditIntent) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(createFreshState()))
+      }
+      if (isEditIntent) {
+        window.setTimeout(() => sessionStorage.removeItem(EDIT_INTENT_KEY), 500)
+      }
       isLoaded.current = true
-      setState(loadState())
+      setState(
+        pathname === "/invoice/new" && !isEditIntent
+          ? createFreshState()
+          : loadState()
+      )
     }, 0)
 
     return () => {
@@ -567,7 +595,7 @@ export default function App() {
         hydrationTimer.current = null
       }
     }
-  }, [])
+  }, [pathname])
 
   useEffect(() => {
     if (!isLoaded.current) return
@@ -687,49 +715,50 @@ export default function App() {
   const updateItemDescription = useCallback(
     (id: string, description: string) => {
       markInvoiceDirty()
+      const shouldSearchProducts =
+        items.find((item) => item.id === id)?.itemType === "product"
       setState((s) => ({
         ...s,
-        items: s.items.map((it) =>
-          it.id === id
-            ? {
-                ...it,
-                description,
-                productId: undefined,
-                productSku: undefined,
-                productStockQty: undefined,
-              }
-            : it
-        ),
+        items: s.items.map((it) => {
+          if (it.id !== id) return it
+          return {
+            ...it,
+            description,
+            productId: undefined,
+            productSku: undefined,
+            productStockQty: undefined,
+          }
+        }),
       }))
       setProductSearch((current) => ({
         ...current,
-        activeItemId: id,
+        activeItemId: shouldSearchProducts ? id : null,
         loading: false,
-        products: description.trim().length < 2 ? [] : current.products,
-        query: description,
+        products:
+          shouldSearchProducts && description.trim().length >= 2
+            ? current.products
+            : [],
+        query: shouldSearchProducts ? description : "",
       }))
     },
-    [markInvoiceDirty]
+    [items, markInvoiceDirty]
   )
 
-  const calculateDiscountFromMrp = useCallback(
-    (mrp: number, price: number) => {
-      if (mrp > 0 && price >= 0) {
-        if (price >= mrp) return 0
-        return Number((((mrp - price) / mrp) * 100).toFixed(2))
-      }
-      return 0
-    },
-    []
-  )
+  const calculateDiscountFromMrp = useCallback((mrp: number, price: number) => {
+    if (mrp > 0 && price >= 0) {
+      if (price >= mrp) return 0
+      return Number((((mrp - price) / mrp) * 100).toFixed(2))
+    }
+    return 0
+  }, [])
 
-  const handleLineItemTypeChange = useCallback(
-    (type: "service" | "product") => {
+  const updateItemType = useCallback(
+    (id: string, type: "service" | "product") => {
       markInvoiceDirty()
       setState((s) => ({
         ...s,
-        lineItemType: type,
         items: s.items.map((it) => {
+          if (it.id !== id) return it
           if (type === "product") {
             const autoDiscount = calculateDiscountFromMrp(it.mrp, it.price)
             return {
@@ -741,9 +770,24 @@ export default function App() {
           return {
             ...it,
             itemType: "service",
+            productId: undefined,
+            productSku: undefined,
+            productStockQty: undefined,
           }
         }),
       }))
+      if (type === "service") {
+        setProductSearch((current) =>
+          current.activeItemId === id
+            ? {
+                activeItemId: null,
+                loading: false,
+                products: [],
+                query: "",
+              }
+            : current
+        )
+      }
     },
     [calculateDiscountFromMrp, markInvoiceDirty]
   )
@@ -757,7 +801,7 @@ export default function App() {
           if (it.id !== id) return it
           const nextMrp = Math.max(0, mrp)
           const autoDiscount =
-            (s.lineItemType || "service") === "product"
+            it.itemType === "product"
               ? calculateDiscountFromMrp(nextMrp, it.price)
               : it.discount
           return {
@@ -780,7 +824,7 @@ export default function App() {
           if (it.id !== id) return it
           const nextPrice = Math.max(0, price)
           const autoDiscount =
-            (s.lineItemType || "service") === "product"
+            it.itemType === "product"
               ? calculateDiscountFromMrp(it.mrp, nextPrice)
               : it.discount
           return {
@@ -804,13 +848,11 @@ export default function App() {
 
           const nextQty = Number(it.qty) > 0 ? Number(it.qty) : 1
           const itemMrp = product.mrp || 0
-          const autoDiscount =
-            (s.lineItemType || "service") === "product"
-              ? calculateDiscountFromMrp(itemMrp, product.price)
-              : it.discount
+          const autoDiscount = calculateDiscountFromMrp(itemMrp, product.price)
 
           return {
             ...it,
+            itemType: "product",
             description: product.name,
             price: product.price,
             mrp: itemMrp,
@@ -868,7 +910,7 @@ export default function App() {
           discount: 0,
           taxRate: 0,
           taxMode: "exclusive",
-          itemType: s.lineItemType || "service",
+          itemType: "service",
         },
       ],
     }))
@@ -888,28 +930,8 @@ export default function App() {
 
   const resetAll = useCallback(() => {
     markInvoiceDirty()
-    const fresh: InvoiceState = {
-      ...DEFAULT_STATE,
-      items: [
-        {
-          id: newId(),
-          description: "",
-          qty: 1,
-          price: 0,
-          mrp: 0,
-          discount: 0,
-          taxRate: 0,
-          taxMode: "exclusive",
-          itemType: "service",
-        },
-      ],
-      meta: {
-        ...DEFAULT_STATE.meta,
-        issueDate: todayISO(),
-        dueDate: plusDaysISO(14),
-      },
-    }
-    setState(fresh)
+    sessionStorage.removeItem(EDIT_INTENT_KEY)
+    setState(createFreshState())
   }, [markInvoiceDirty])
 
   const loadSample = useCallback(() => {
@@ -940,9 +962,7 @@ export default function App() {
       const taxRate = Number(it.taxRate) || 0
       const taxMultiplier = 1 + taxRate / 100
       const isProduct =
-        (lineItemType === "product" || it.itemType === "product") &&
-        it.mrp > 0 &&
-        it.mrp > price
+        it.itemType === "product" && it.mrp > 0 && it.mrp > price
       const amount = isProduct ? qty * it.mrp : qty * price
       const discountAmount = isProduct
         ? qty * (it.mrp - price)
@@ -967,7 +987,7 @@ export default function App() {
     const total = lines.reduce((sum, line) => sum + line.total, 0)
 
     return { subtotal, discountAmount, taxable, taxAmount, total, lines }
-  }, [items, lineItemType])
+  }, [items])
 
   const handleGenerateInvoice = useCallback(async () => {
     clearGenerationTimers()
@@ -1020,6 +1040,7 @@ export default function App() {
             discount: item.discount,
             taxRate: item.taxRate,
             taxMode: item.taxMode,
+            itemType: item.itemType,
             productId: item.productId,
           })),
           notes,
@@ -1086,7 +1107,6 @@ export default function App() {
           return updated ?? item
         }),
       }))
-
     } catch (error) {
       setInvoiceError(
         error instanceof Error ? error.message : "Invoice save failed"
@@ -1155,53 +1175,13 @@ export default function App() {
     setShowReceiptPrinter(false)
     setInvoiceGenerated(false)
     setReceiptStage("processing")
+    sessionStorage.setItem(EDIT_INTENT_KEY, "1")
     router.push("/invoice/new")
   }, [clearGenerationTimers, router])
 
   const handlePrint = useCallback(() => {
     window.print()
   }, [])
-
-  const handleProductImport = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0]
-      if (!file) return
-
-      setIsImporting(true)
-      setImportError("")
-      setImportSummary(null)
-
-      try {
-        const formData = new FormData()
-        formData.append("file", file)
-
-        const response = await fetch("/api/products/import", {
-          method: "POST",
-          body: formData,
-        })
-        const data = (await response.json().catch(() => null)) as
-          (ImportSummary & { error?: string }) | null
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Product import failed")
-        }
-
-        setImportSummary({
-          inserted: Number(data?.inserted) || 0,
-          updated: Number(data?.updated) || 0,
-          failed: Number(data?.failed) || 0,
-        })
-      } catch (error) {
-        setImportError(
-          error instanceof Error ? error.message : "Product import failed"
-        )
-      } finally {
-        setIsImporting(false)
-        event.target.value = ""
-      }
-    },
-    []
-  )
 
   const isGenerating = showReceiptPrinter && !invoiceGenerated
 
@@ -1265,6 +1245,12 @@ export default function App() {
               <Link
                 className="btn-ghost nav-link desktop-nav-link"
                 href="/invoice/new"
+                onClick={() => {
+                  sessionStorage.removeItem(EDIT_INTENT_KEY)
+                  if (pathname === "/invoice/new") {
+                    setState(createFreshState())
+                  }
+                }}
                 aria-current={
                   isInvoiceRoute || pathname === "/invoice/new"
                     ? "page"
@@ -1341,7 +1327,8 @@ export default function App() {
                       <strong style={{ color: "#3b82f6" }}>
                         Editing Saved Invoice {meta.number}:
                       </strong>{" "}
-                      Saving will update this invoice in-place and synchronize inventory stock.
+                      Saving will update this invoice in-place and synchronize
+                      inventory stock.
                     </div>
                     <Button
                       className="btn-ghost"
@@ -1604,50 +1591,13 @@ export default function App() {
                   </div>
                 </Panel>
 
-                <Panel
-                  title="Line Items"
-                  actions={
-                    <div
-                      className="line-item-type-radios"
-                      role="radiogroup"
-                      aria-label="Line item type"
-                    >
-                      <label
-                        className={`line-item-type-radio ${lineItemType === "service" ? "is-active" : ""}`}
-                      >
-                        <input
-                          type="radio"
-                          name="lineItemType"
-                          value="service"
-                          checked={lineItemType === "service"}
-                          onChange={() => handleLineItemTypeChange("service")}
-                        />
-                        <span>Service</span>
-                      </label>
-                      <label
-                        className={`line-item-type-radio ${lineItemType === "product" ? "is-active" : ""}`}
-                      >
-                        <input
-                          type="radio"
-                          name="lineItemType"
-                          value="product"
-                          checked={lineItemType === "product"}
-                          onChange={() => handleLineItemTypeChange("product")}
-                        />
-                        <span>Product</span>
-                      </label>
-                    </div>
-                  }
-                >
-                  <div
-                    className={`items-editor ${lineItemType === "product" ? "is-product" : ""}`}
-                  >
+                <Panel title="Line Items">
+                  <div className="items-editor">
                     <div className="item-head">
+                      <span className="ih-type">Type</span>
                       <span className="ih-desc">Description</span>
                       <span className="ih-qty">Qty</span>
-                      {lineItemType === "product" && (
-                        <span className="ih-mrp">MRP</span>
-                      )}
+                      <span className="ih-mrp">MRP</span>
                       <span className="ih-price">Price</span>
                       <span className="ih-discount">Disc %</span>
                       <span className="ih-tax">Tax %</span>
@@ -1661,13 +1611,38 @@ export default function App() {
                       )
                       const isSearchingThisItem =
                         productSearch.activeItemId === it.id
+                      const isProduct = it.itemType === "product"
                       const hasStockLimit =
                         typeof it.productStockQty === "number"
                       return (
                         <div
-                          className={`item-row ${lineItemType === "product" ? "is-product" : ""}`}
+                          className={`item-row ${isProduct ? "is-product" : "is-service"}`}
                           key={it.id}
                         >
+                          <div
+                            className="item-kind"
+                            role="radiogroup"
+                            aria-label="Line item type"
+                          >
+                            <button
+                              className={`item-kind-option ${!isProduct ? "is-active" : ""}`}
+                              type="button"
+                              onClick={() => updateItemType(it.id, "service")}
+                              aria-pressed={!isProduct}
+                              title="Service"
+                            >
+                              Svc
+                            </button>
+                            <button
+                              className={`item-kind-option ${isProduct ? "is-active" : ""}`}
+                              type="button"
+                              onClick={() => updateItemType(it.id, "product")}
+                              aria-pressed={isProduct}
+                              title="Product"
+                            >
+                              Prod
+                            </button>
+                          </div>
                           <div className="product-picker">
                             <Input
                               className="in item-desc"
@@ -1676,16 +1651,18 @@ export default function App() {
                                 updateItemDescription(it.id, e.target.value)
                               }
                               onFocus={() =>
-                                setProductSearch((current) => ({
-                                  ...current,
-                                  activeItemId: it.id,
-                                  loading: false,
-                                  products:
-                                    it.description.trim().length < 2
-                                      ? []
-                                      : current.products,
-                                  query: it.description,
-                                }))
+                                isProduct
+                                  ? setProductSearch((current) => ({
+                                      ...current,
+                                      activeItemId: it.id,
+                                      loading: false,
+                                      products:
+                                        it.description.trim().length < 2
+                                          ? []
+                                          : current.products,
+                                      query: it.description,
+                                    }))
+                                  : undefined
                               }
                               onBlur={() => {
                                 window.setTimeout(() => {
@@ -1701,7 +1678,11 @@ export default function App() {
                                   )
                                 }, 120)
                               }}
-                              placeholder="Search products or type manually"
+                              placeholder={
+                                isProduct
+                                  ? "Search products or type manually"
+                                  : "Describe service"
+                              }
                               aria-label="Item description"
                               autoComplete="off"
                             />
@@ -1742,6 +1723,13 @@ export default function App() {
                                           </small>
                                         </span>
                                         <em>{product.stockQty} in stock</em>
+                                        <em>
+                                          Buy{" "}
+                                          {formatMoney(
+                                            product.buyPrice || 0,
+                                            currency
+                                          )}
+                                        </em>
                                       </button>
                                     ))
                                   )}
@@ -1767,27 +1755,26 @@ export default function App() {
                               aria-label="Quantity"
                             />
                           </div>
-                          {lineItemType === "product" && (
-                            <div className="item-control item-mrp">
-                              <span>MRP</span>
-                              <Input
-                                className="in item-num"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={it.mrp || 0}
-                                onChange={(e) =>
-                                  updateItemMrp(
-                                    it.id,
-                                    e.target.value === ""
-                                      ? 0
-                                      : Number(e.target.value)
-                                  )
-                                }
-                                aria-label="MRP"
-                              />
-                            </div>
-                          )}
+                          <div className="item-control item-mrp">
+                            <span>MRP</span>
+                            <Input
+                              className="in item-num"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={it.mrp || 0}
+                              onChange={(e) =>
+                                updateItemMrp(
+                                  it.id,
+                                  e.target.value === ""
+                                    ? 0
+                                    : Number(e.target.value)
+                                )
+                              }
+                              disabled={!isProduct}
+                              aria-label="MRP"
+                            />
+                          </div>
                           <div className="item-control item-price">
                             <span>Price</span>
                             <Input
@@ -1809,7 +1796,7 @@ export default function App() {
                           </div>
                           <div className="item-control item-discount">
                             <span>Disc</span>
-                            {lineItemType === "product" ? (
+                            {isProduct ? (
                               <Input
                                 className="in item-num is-auto-discount"
                                 type="text"
@@ -1886,45 +1873,6 @@ export default function App() {
                   >
                     <IconPlus /> Add item
                   </Button>
-                  <div className="import-strip">
-                    <input
-                      ref={importInputRef}
-                      className="sr-only"
-                      type="file"
-                      accept=".csv,.xls,.xlsx"
-                      onChange={handleProductImport}
-                      aria-label="Import products"
-                    />
-                    <Button
-                      className="btn-import"
-                      type="button"
-                      variant="outline"
-                      onClick={() => importInputRef.current?.click()}
-                      disabled={isImporting}
-                    >
-                      <UploadIcon aria-hidden="true" />{" "}
-                      {isImporting ? "Importing..." : "Import products"}
-                    </Button>
-                    <a
-                      className="btn-import"
-                      href="/api/products/import"
-                      download
-                    >
-                      Sample XLSX
-                    </a>
-                    {importSummary && (
-                      <span className="import-status">
-                        {importSummary.inserted} inserted,{" "}
-                        {importSummary.updated} updated, {importSummary.failed}{" "}
-                        failed
-                      </span>
-                    )}
-                    {importError && (
-                      <span className="import-status is-error">
-                        {importError}
-                      </span>
-                    )}
-                  </div>
                 </Panel>
 
                 <Panel title="Totals & Notes">

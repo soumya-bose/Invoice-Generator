@@ -13,6 +13,7 @@ import {
 import {
   BoxesIcon,
   CheckIcon,
+  FileSpreadsheetIcon,
   PencilIcon,
   PlusIcon,
   RefreshCcwIcon,
@@ -346,8 +347,7 @@ export function InventoryPage() {
 
   const allOnPageSelected = useMemo(() => {
     return (
-      products.length > 0 &&
-      products.every((p) => selectedIds.includes(p._id))
+      products.length > 0 && products.every((p) => selectedIds.includes(p._id))
     )
   }, [products, selectedIds])
 
@@ -559,15 +559,24 @@ export function InventoryPage() {
             </div>
             {/* Fix #19: These three stats reflect only the current page of results */}
             <div title="Units on this page">
-              <span>Units <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
+              <span>
+                Units{" "}
+                <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small>
+              </span>
               <strong>{totals.units}</strong>
             </div>
             <div title="Stock value on this page">
-              <span>Value <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
+              <span>
+                Value{" "}
+                <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small>
+              </span>
               <strong>{formatMoney(totals.value)}</strong>
             </div>
             <div title="Out-of-stock on this page">
-              <span>Out <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small></span>
+              <span>
+                Out{" "}
+                <small style={{ fontWeight: 400, opacity: 0.6 }}>(page)</small>
+              </span>
               <strong>{totals.out}</strong>
             </div>
           </section>
@@ -698,7 +707,7 @@ export function InventoryPage() {
 
               <div className="inventory-actions">
                 <Button
-                  className="btn-primary"
+                  className="inventory-action-button is-primary"
                   onClick={saveProduct}
                   disabled={saving}
                 >
@@ -706,21 +715,16 @@ export function InventoryPage() {
                 </Button>
                 {editingId && (
                   <Button
-                    className="btn-import"
+                    className="inventory-action-button is-danger"
                     type="button"
-                    style={{
-                      background: "#ef4444",
-                      color: "#ffffff",
-                      border: "none",
-                      padding: "0 0.75rem",
-                    }}
                     onClick={() => {
                       const prod = products.find((p) => p._id === editingId)
                       if (prod) void deleteProduct(prod)
                     }}
                     disabled={deletingId === editingId}
                   >
-                    <Trash2Icon aria-hidden="true" /> {deletingId === editingId ? "Deleting..." : "Delete"}
+                    <Trash2Icon aria-hidden="true" />{" "}
+                    {deletingId === editingId ? "Deleting..." : "Delete"}
                   </Button>
                 )}
                 <input
@@ -731,7 +735,7 @@ export function InventoryPage() {
                   onChange={handleImport}
                 />
                 <Button
-                  className="btn-import"
+                  className="inventory-action-button"
                   variant="outline"
                   onClick={() => importInputRef.current?.click()}
                   disabled={importing}
@@ -739,11 +743,15 @@ export function InventoryPage() {
                   <UploadIcon aria-hidden="true" />{" "}
                   {importing ? "Importing" : "Import"}
                 </Button>
-                <a className="btn-import" href="/api/products/import" download>
-                  Sample XLSX
+                <a
+                  className="inventory-action-button"
+                  href="/api/products/import"
+                  download
+                >
+                  <FileSpreadsheetIcon aria-hidden="true" /> Sample XLSX
                 </a>
                 <Button
-                  className="btn-import"
+                  className="inventory-action-button"
                   variant="outline"
                   onClick={seedDemoProducts}
                   disabled={seeding}
@@ -827,9 +835,22 @@ export function InventoryPage() {
                   </div>
                   <div className="inventory-bulk-actions">
                     {confirmBulkDelete ? (
-                      <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
-                        <span style={{ fontSize: "0.825rem", color: "#ef4444", fontWeight: 600 }}>
-                          Delete {selectedIds.length} product{selectedIds.length > 1 ? "s" : ""}?
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.825rem",
+                            color: "#ef4444",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Delete {selectedIds.length} product
+                          {selectedIds.length > 1 ? "s" : ""}?
                         </span>
                         <Button
                           type="button"
@@ -872,7 +893,11 @@ export function InventoryPage() {
                         }}
                         onClick={() => setConfirmBulkDelete(true)}
                       >
-                        <Trash2Icon aria-hidden="true" style={{ width: 14, height: 14 }} /> Bulk Delete ({selectedIds.length})
+                        <Trash2Icon
+                          aria-hidden="true"
+                          style={{ width: 14, height: 14 }}
+                        />{" "}
+                        Bulk Delete ({selectedIds.length})
                       </Button>
                     )}
                   </div>
@@ -937,9 +962,15 @@ export function InventoryPage() {
                             </div>
                           </td>
                           <td>{product.sku}</td>
-                          <td>{product.mrp ? formatMoney(product.mrp) : "—"}</td>
+                          <td>
+                            {product.mrp ? formatMoney(product.mrp) : "—"}
+                          </td>
                           <td>{formatMoney(product.price)}</td>
-                          <td>{product.buyPrice ? formatMoney(product.buyPrice) : "—"}</td>
+                          <td>
+                            {product.buyPrice
+                              ? formatMoney(product.buyPrice)
+                              : "—"}
+                          </td>
                           <td>{product.taxRate}%</td>
                           <td>
                             <span
@@ -976,7 +1007,13 @@ export function InventoryPage() {
                             </div>
                           </td>
                           <td>
-                            <div style={{ display: "inline-flex", gap: "0.35rem", alignItems: "center" }}>
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                gap: "0.35rem",
+                                alignItems: "center",
+                              }}
+                            >
                               <ProductEditPopover
                                 product={product}
                                 onSave={(nextForm) =>
@@ -985,7 +1022,13 @@ export function InventoryPage() {
                                 onDelete={() => deleteProduct(product)}
                               />
                               {confirmDeleteId === product._id ? (
-                                <div style={{ display: "inline-flex", gap: "0.25rem", alignItems: "center" }}>
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    gap: "0.25rem",
+                                    alignItems: "center",
+                                  }}
+                                >
                                   <Button
                                     type="button"
                                     size="sm"
@@ -1001,13 +1044,19 @@ export function InventoryPage() {
                                     onClick={() => void deleteProduct(product)}
                                     disabled={deletingId === product._id}
                                   >
-                                    {deletingId === product._id ? "..." : "Delete"}
+                                    {deletingId === product._id
+                                      ? "..."
+                                      : "Delete"}
                                   </Button>
                                   <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    style={{ height: "1.75rem", padding: "0 0.4rem", fontSize: "0.75rem" }}
+                                    style={{
+                                      height: "1.75rem",
+                                      padding: "0 0.4rem",
+                                      fontSize: "0.75rem",
+                                    }}
                                     onClick={() => setConfirmDeleteId(null)}
                                     disabled={deletingId === product._id}
                                   >
@@ -1030,7 +1079,10 @@ export function InventoryPage() {
                                   }}
                                   aria-label={`Delete ${product.name}`}
                                 >
-                                  <Trash2Icon aria-hidden="true" style={{ width: 14, height: 14 }} />
+                                  <Trash2Icon
+                                    aria-hidden="true"
+                                    style={{ width: 14, height: 14 }}
+                                  />
                                 </Button>
                               )}
                             </div>
@@ -1261,22 +1313,18 @@ function ProductEditPopover({
         </div>
         <div className="inventory-inline-actions">
           <Button
-            className="btn-primary"
+            className="inventory-action-button is-primary"
             type="button"
             onClick={saveDraft}
             disabled={saving || deleting}
           >
             <SaveIcon aria-hidden="true" /> {saving ? "Saving" : "Save"}
           </Button>
-          {onDelete && (
-            confirmDelete ? (
+          {onDelete &&
+            (confirmDelete ? (
               <Button
+                className="inventory-action-button is-danger"
                 type="button"
-                style={{
-                  background: "#ef4444",
-                  color: "#ffffff",
-                  border: "none",
-                }}
                 onClick={async () => {
                   setDeleting(true)
                   try {
@@ -1292,26 +1340,21 @@ function ProductEditPopover({
                 }}
                 disabled={deleting}
               >
-                <Trash2Icon aria-hidden="true" /> {deleting ? "Deleting..." : "Confirm Delete"}
+                <Trash2Icon aria-hidden="true" />{" "}
+                {deleting ? "Deleting..." : "Confirm Delete"}
               </Button>
             ) : (
               <Button
+                className="inventory-action-button is-danger"
                 type="button"
-                style={{
-                  background: "#ef4444",
-                  color: "#ffffff",
-                  border: "none",
-                  padding: "0 0.75rem",
-                }}
                 onClick={() => setConfirmDelete(true)}
                 disabled={saving}
               >
                 <Trash2Icon aria-hidden="true" /> Delete
               </Button>
-            )
-          )}
+            ))}
           <Button
-            className="btn-import"
+            className="inventory-action-button"
             type="button"
             variant="outline"
             onClick={() => {
