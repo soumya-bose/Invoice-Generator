@@ -323,24 +323,8 @@ export function SavedInvoicesPage() {
             </div>
 
             {notice && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "0.75rem 1rem",
-                  borderRadius: "0.5rem",
-                  background: "rgba(34, 197, 94, 0.1)",
-                  border: "1px solid rgba(34, 197, 94, 0.3)",
-                  color: "#16a34a",
-                  fontSize: "0.875rem",
-                  marginBottom: "1rem",
-                }}
-              >
-                <CheckCircle2Icon
-                  aria-hidden="true"
-                  style={{ width: 16, height: 16, flexShrink: 0 }}
-                />
+              <div className="saved-invoices-notice">
+                <CheckCircle2Icon aria-hidden="true" />
                 <span>{notice}</span>
               </div>
             )}
@@ -355,14 +339,14 @@ export function SavedInvoicesPage() {
               <div className="saved-invoices-list">
                 {invoices.map((invoice) => (
                   <div className="saved-invoice" key={invoice._id}>
-                    <div>
+                    <div className="saved-invoice-copy">
                       <strong>{invoice.invoiceNumber}</strong>
                       <span>
                         {invoice.clientName || "Client"} -{" "}
                         {formatDateLabel(invoice.issueDate)}
                       </span>
                     </div>
-                    <b>
+                    <b className="saved-invoice-total">
                       {formatMoney(
                         invoice.total,
                         isCurrencyCode(invoice.currency)
@@ -370,16 +354,9 @@ export function SavedInvoicesPage() {
                           : DEFAULT_STATE.meta.currency
                       )}
                     </b>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "0.5rem",
-                        alignItems: "center",
-                        flexWrap: "wrap",
-                      }}
-                    >
+                    <div className="saved-invoice-actions">
                       <Button
-                        className="btn-import"
+                        className="saved-invoice-action"
                         type="button"
                         variant="outline"
                         onClick={() => viewInvoice(invoice)}
@@ -387,7 +364,7 @@ export function SavedInvoicesPage() {
                         <EyeIcon aria-hidden="true" /> View
                       </Button>
                       <Button
-                        className="btn-import"
+                        className="saved-invoice-action"
                         type="button"
                         variant="outline"
                         onClick={() => editInvoice(invoice)}
@@ -395,24 +372,11 @@ export function SavedInvoicesPage() {
                         <PencilIcon aria-hidden="true" /> Edit
                       </Button>
                       {confirmDeleteId === invoice._id ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            gap: "0.25rem",
-                            alignItems: "center",
-                          }}
-                        >
+                        <div className="saved-invoice-confirm">
                           <Button
                             type="button"
                             size="sm"
-                            style={{
-                              background: "#ef4444",
-                              color: "#ffffff",
-                              border: "none",
-                              padding: "0 0.6rem",
-                              height: "2rem",
-                              fontWeight: 600,
-                            }}
+                            className="saved-invoice-action is-danger"
                             onClick={() => void handleDeleteInvoice(invoice)}
                             disabled={deletingId === invoice._id}
                           >
@@ -424,7 +388,7 @@ export function SavedInvoicesPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            style={{ height: "2rem" }}
+                            className="saved-invoice-action is-muted"
                             onClick={() => setConfirmDeleteId(null)}
                             disabled={deletingId === invoice._id}
                           >
@@ -434,12 +398,7 @@ export function SavedInvoicesPage() {
                       ) : (
                         <Button
                           type="button"
-                          style={{
-                            background: "#ef4444",
-                            color: "#ffffff",
-                            border: "none",
-                            padding: "0 0.75rem",
-                          }}
+                          className="saved-invoice-action is-danger"
                           onClick={() => {
                             setError("")
                             setNotice("")
