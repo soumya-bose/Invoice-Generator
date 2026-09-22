@@ -438,6 +438,17 @@ function formatDateLabel(iso: string) {
   }).format(d)
 }
 
+function formatInvoiceFileDate(iso: string) {
+  const date = isoToDate(iso)
+  if (!date) return ""
+
+  const day = String(date.getDate()).padStart(2, "0")
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const year = date.getFullYear()
+
+  return `${day} ${month} ${year}`
+}
+
 function isoToDate(iso: string) {
   if (!iso) return undefined
   const date = new Date(iso + "T00:00:00")
@@ -1180,8 +1191,22 @@ export default function App() {
   }, [clearGenerationTimers, router])
 
   const handlePrint = useCallback(() => {
+    const previousTitle = document.title
+    const fileDate = formatInvoiceFileDate(meta.issueDate)
+    document.title = [meta.number || "Invoice", fileDate && `(${fileDate})`]
+      .filter(Boolean)
+      .join(" ")
+
+    window.addEventListener(
+      "afterprint",
+      () => {
+        document.title = previousTitle
+      },
+      { once: true }
+    )
+
     window.print()
-  }, [])
+  }, [meta.issueDate, meta.number])
 
   const isGenerating = showReceiptPrinter && !invoiceGenerated
 
@@ -2480,9 +2505,10 @@ function TaxInvoiceDocument({
       <table className="tax-items">
         <thead>
           <tr>
-            <th>S.No</th>
+            <th>S.no</th>
             <th>Qty.</th>
             <th>Product</th>
+            <th>MRP</th>
             <th>Rate</th>
             <th>DIS</th>
             <th>GST</th>
@@ -2493,6 +2519,7 @@ function TaxInvoiceDocument({
           {visibleItems.map((it, index) => {
             const qty = Number(it.qty) || 0
             const price = Number(it.price) || 0
+            const mrp = Number(it.mrp) || 0
             const line = calc.lines.find((entry) => entry.id === it.id)
 
             return (
@@ -2500,6 +2527,7 @@ function TaxInvoiceDocument({
                 <td>{index + 1}</td>
                 <td>{qty}</td>
                 <td>{it.description || "Item description"}</td>
+                <td>{mrp > 0 ? formatMoney(mrp) : "-"}</td>
                 <td>{formatMoney(price)}</td>
                 <td>{Number(it.discount) || 0}%</td>
                 <td>{Number(it.taxRate) || 0}%</td>
@@ -2510,6 +2538,7 @@ function TaxInvoiceDocument({
           {printableRows.map((_, index) => (
             <tr className="tax-empty-row" key={`empty-${index}`}>
               <td>{visibleItems.length + index + 1}</td>
+              <td />
               <td />
               <td />
               <td />

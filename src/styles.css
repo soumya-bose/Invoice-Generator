@@ -2252,13 +2252,19 @@ body {
 
 .tax-items th:first-child,
 .tax-items td:first-child {
-  width: 68px;
+  width: 46px;
   text-align: center;
+}
+
+.tax-items th:first-child {
+  padding-right: 3px;
+  padding-left: 3px;
+  text-overflow: clip;
 }
 
 .tax-items th:nth-child(2),
 .tax-items td:nth-child(2) {
-  width: 92px;
+  width: 46px;
   text-align: center;
 }
 
@@ -2270,20 +2276,26 @@ body {
 
 .tax-items th:nth-child(4),
 .tax-items td:nth-child(4) {
-  width: 110px;
+  width: 68px;
   text-align: right;
 }
 
 .tax-items th:nth-child(5),
-.tax-items td:nth-child(5),
+.tax-items td:nth-child(5) {
+  width: 86px;
+  text-align: right;
+}
+
 .tax-items th:nth-child(6),
-.tax-items td:nth-child(6) {
-  width: 80px;
+.tax-items td:nth-child(6),
+.tax-items th:nth-child(7),
+.tax-items td:nth-child(7) {
+  width: 58px;
   text-align: center;
 }
 
-.tax-items th:nth-child(7),
-.tax-items td:nth-child(7) {
+.tax-items th:nth-child(8),
+.tax-items td:nth-child(8) {
   width: 120px;
   text-align: right;
 }
@@ -4188,15 +4200,16 @@ body {
 /* â”€â”€â”€ Print â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media print {
   @page {
-    size: A4 portrait;
-    margin: 8mm 6mm;
+    size: 210mm 297mm;
+    margin: 0;
   }
   html,
   body {
-    width: 100%;
-    height: auto;
+    width: 210mm;
+    height: 297mm;
     min-height: 0;
-    overflow: visible;
+    margin: 0 !important;
+    overflow: hidden;
     background: #fff !important;
   }
   .no-print,
@@ -4231,16 +4244,19 @@ body {
     width: 100%;
   }
   .invoice-result {
-    width: 100%;
+    width: 210mm;
+    height: 297mm;
+    padding: 5mm;
+    box-sizing: border-box;
   }
   .tax-invoice-template {
-    width: 100%;
-    max-width: 198mm;
-    height: auto;
+    width: 200mm;
+    max-width: none;
+    height: 287mm;
     min-height: 0;
     box-sizing: border-box;
-    margin: 0 auto;
-    overflow: visible;
+    margin: 0;
+    overflow: hidden;
     box-shadow: none;
     border-radius: 0;
     padding: 0;
@@ -4313,7 +4329,7 @@ body {
     grid-template-columns: 23mm 4mm minmax(0, 1fr);
   }
   .tax-items {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     margin: 0;
   }
   .tax-items th,
@@ -4329,11 +4345,15 @@ body {
   }
   .tax-items th:first-child,
   .tax-items td:first-child {
-    width: 12mm;
+    width: 10mm;
+  }
+  .tax-items th:first-child {
+    padding-right: 0.4mm;
+    padding-left: 0.4mm;
   }
   .tax-items th:nth-child(2),
   .tax-items td:nth-child(2) {
-    width: 21mm;
+    width: 10mm;
   }
   .tax-items th:nth-child(3),
   .tax-items td:nth-child(3) {
@@ -4341,16 +4361,20 @@ body {
   }
   .tax-items th:nth-child(4),
   .tax-items td:nth-child(4) {
-    width: 23mm;
-  }
-  .tax-items th:nth-child(5),
-  .tax-items td:nth-child(5),
-  .tax-items th:nth-child(6),
-  .tax-items td:nth-child(6) {
     width: 16mm;
   }
+  .tax-items th:nth-child(5),
+  .tax-items td:nth-child(5) {
+    width: 20mm;
+  }
+  .tax-items th:nth-child(6),
+  .tax-items td:nth-child(6),
   .tax-items th:nth-child(7),
   .tax-items td:nth-child(7) {
+    width: 11mm;
+  }
+  .tax-items th:nth-child(8),
+  .tax-items td:nth-child(8) {
     width: 27mm;
   }
   .tax-empty-row {
@@ -4396,8 +4420,9 @@ body {
   }
   .tax-terms {
     grid-template-columns: 1fr 59mm;
-    flex: 0 0 auto;
+    flex: 0 0 39mm;
     min-height: 0;
+    overflow: hidden;
   }
   .tax-terms-copy {
     padding: 2.5mm 5mm;
